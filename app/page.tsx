@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="landing-page">
@@ -10,9 +12,9 @@ export default function Home() {
           <h1 id="welcome-heading">Welcome back</h1>
           <p>Sign in to view your platform status.</p>
         </div>
-        <button className="login-button" type="button">
+        <Link className="login-button" href="/dashboard">
           Log in
-        </button>
+        </Link>
       </section>
     </main>
   );
