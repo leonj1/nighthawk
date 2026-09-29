@@ -1,7 +1,12 @@
 # Nighthawk
 
-A small Next.js platform status app with a centered login landing page and a
-JSON health endpoint.
+Nighthawk is a monitoring platform for highly available services deployed
+across multiple regions. If one regional instance goes offline, the platform
+remains online but is marked as having lost resiliency. If every instance goes
+offline, the platform is considered offline.
+
+This repository contains the Next.js application, including its status
+dashboard and JSON health endpoints.
 
 ## Development
 
