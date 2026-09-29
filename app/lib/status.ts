@@ -5,12 +5,14 @@ export type Platform = {
   id: string;
   name: string;
   instances: string[];
+  healthUrls?: Record<string, string>;
+  checkedAt?: string;
   // Newest first. Each index represents the same check window for every instance.
   checks?: Record<string, (boolean | null)[]>;
 };
 
 export const storageKey = "nighthawk-platforms";
-export const recentActivity = ["just now", "30 mins ago", "1 hour ago"];
+export const recentActivity = ["Latest check", "Previous check", "2 checks ago"];
 
 export function instanceStatus(platform: Platform, instance: string, index = 0): CheckStatus {
   const result = platform.checks?.[instance]?.[index];

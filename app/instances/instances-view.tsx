@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePlatforms } from "../lib/use-platforms";
 
 import {
-  defaultPlatforms, instanceStatus, platformStatus, recentActivity, statusLabels, storageKey,
-  type CheckStatus, type Platform,
+  instanceStatus, platformStatus, recentActivity, statusLabels,
+  type CheckStatus,
 } from "../lib/status";
 
 type InstancesViewProps = {
@@ -39,26 +39,13 @@ function StatusBar({ status }: { status: CheckStatus }) {
 }
 
 export default function InstancesView({ platformId }: InstancesViewProps) {
-  const [storedPlatform, setStoredPlatform] = useState<Platform | null>(null);
-
-  useEffect(() => {
-    setStoredPlatform(null);
-    if (!platformId) return;
-
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      const platforms = stored ? (JSON.parse(stored) as Platform[]) : [];
-      setStoredPlatform(platforms.find((candidate) => candidate.id === platformId) ?? null);
-    } catch {
-      setStoredPlatform(null);
-    }
-  }, [platformId]);
-
-  const platform = (storedPlatform?.id === platformId ? storedPlatform : null)
-    ?? defaultPlatforms.find((candidate) => candidate.id === (platformId ?? "platform-2"))
+  const { platforms, error } = usePlatforms();
+  const platform = platforms.find((candidate) => candidate.id === platformId)
+    ?? (!platformId ? platforms[0] : undefined)
     ?? { id: platformId ?? "", name: defaultPlatformName(platformId), instances: [] };
   const instances = platform.instances.map((instance) => ({
     name: displayInstanceName(instance),
+    healthUrl: platform.healthUrls?.[instance] ?? instance,
     history: recentActivity.map((_, index) => instanceStatus(platform, instance, index)),
   }));
   const platformHistory = recentActivity.map((_, index) => platformStatus(platform, index));
@@ -69,7 +56,8 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
         {platformId ? <Link className="instances-back-link" href="/dashboard">← Platforms</Link> : null}
         <h1 id="platform-name">Platform: {platform.name}</h1>
         <p className="status-legend">Green: successful check · Red: offline · Gray: unchecked</p>
-        {defaultPlatforms.includes(platform) ? <p className="status-note">Sample health checks</p> : null}
+        <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
         <div className="platform-history">
           <div className="status-stack">
             {platformHistory.map((status, index) => (
@@ -91,7 +79,8 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
             <div className="instance-columns">
               {instances.map((instance, instanceIndex) => (
                 <article className="instance-column" key={`${instance.name}-${instanceIndex}`}>
-                  <h3 title={instance.name}>{instance.name}</h3>
+                  <h3 title={instance.healthUrl}>{instance.name}</h3>
+                  <p className="status-note">{instance.healthUrl}</p>
                   <div className="status-stack">
                     {instance.history.map((status, index) => (
                       <StatusBar key={`${status}-${index}`} status={status} />

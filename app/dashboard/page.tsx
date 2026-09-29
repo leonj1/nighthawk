@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { dashboardStatus, defaultPlatforms, statusLabels, storageKey, type Platform } from "../lib/status";
+import { dashboardStatus, statusLabels, type Platform } from "../lib/status";
+
+import { usePlatforms, savePlatforms } from "../lib/use-platforms";
+import { healthUrl } from "../lib/health-url";
 
 function hostnameFromInput(value: string) {
   const candidate = value.trim();
@@ -36,28 +39,19 @@ function instanceUrlFromInput(value: string) {
 }
 
 export default function Dashboard() {
-  const [createdPlatforms, setCreatedPlatforms] = useState<Platform[]>([]);
+  const { platforms: createdPlatforms, setPlatforms: setCreatedPlatforms, error } = usePlatforms();
+  const [healthPaths, setHealthPaths] = useState([""]);
+  const [saving, setSaving] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [platformName, setPlatformName] = useState("");
   const [instances, setInstances] = useState([""]);
   const [formError, setFormError] = useState("");
 
-  useEffect(() => {
-    try {
-      const savedPlatforms = window.localStorage.getItem(storageKey);
-
-      if (savedPlatforms) {
-        setCreatedPlatforms(JSON.parse(savedPlatforms) as Platform[]);
-      }
-    } catch {
-      window.localStorage.removeItem(storageKey);
-    }
-  }, []);
-
   const closeDialog = () => {
     setIsDialogOpen(false);
     setPlatformName("");
     setInstances([""]);
+    setHealthPaths([""]);
     setFormError("");
   };
 
@@ -85,10 +79,11 @@ export default function Dashboard() {
   };
 
   const removeInstance = (index: number) => {
+    setHealthPaths((current) => current.filter((_, instanceIndex) => instanceIndex !== index));
     setInstances((current) => current.filter((_, instanceIndex) => instanceIndex !== index));
   };
 
-  const createPlatform = (event: FormEvent<HTMLFormElement>) => {
+  const createPlatform = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const hostname = hostnameFromInput(platformName);
@@ -114,19 +109,30 @@ export default function Dashboard() {
       return;
     }
 
+    let healthUrls: Record<string, string>;
+    try {
+      healthUrls = Object.fromEntries(normalizedInstances.map((instance, index) => [instance!, healthUrl(instance!, healthPaths[index])]));
+    } catch {
+      setFormError("Enter an HTTP(S) health-check URL or a path such as /health.");
+      return;
+    }
+
     const platform: Platform = {
       id: crypto.randomUUID(),
       name: hostname,
       instances: normalizedInstances as string[],
+      healthUrls,
     };
-    const nextPlatforms = [platform, ...createdPlatforms];
-
-    setCreatedPlatforms(nextPlatforms);
-    window.localStorage.setItem(storageKey, JSON.stringify(nextPlatforms));
-    closeDialog();
+    setSaving(true);
+    try {
+      setCreatedPlatforms(await savePlatforms([platform]));
+      closeDialog();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to save platform.");
+    } finally { setSaving(false); }
   };
 
-  const platforms = [...createdPlatforms, ...defaultPlatforms];
+  const platforms = createdPlatforms;
 
   return (
     <main className="dashboard-page">
@@ -151,7 +157,8 @@ export default function Dashboard() {
             <span>{platforms.length} total</span>
           </div>
           <p className="status-legend">Green: successful check · Amber: all instances were offline in this window, now recovered · Red: all instances offline · Gray: unchecked</p>
-          <p className="status-note">Platform 1–15 show sample checks. New platforms await health check data.</p>
+          <p className="status-note">Health checks run every 10 seconds. HTTP 2xx responses are healthy.</p>
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => (
               <Link
@@ -215,13 +222,13 @@ export default function Dashboard() {
                 <label htmlFor="instance-0">Instances</label>
                 <button
                   className="add-instance-button"
-                  onClick={() => setInstances((current) => [...current, ""])}
+                  onClick={() => { setInstances((current) => [...current, ""]); setHealthPaths((current) => [...current, ""]); }}
                   type="button"
                 >
                   + Add instance
                 </button>
               </div>
-              <p className="field-hint">Add each URL where this site is deployed.</p>
+              <p className="field-hint">Add each deployment URL and an optional health-check path or full URL. Leave blank to check the deployment URL.</p>
 
               <div className="instance-fields">
                 {instances.map((instance, index) => (
@@ -233,6 +240,13 @@ export default function Dashboard() {
                       placeholder={`us-east-${index + 1}.example.com`}
                       type="text"
                       value={instance}
+                    />
+                    <input
+                      aria-label={`Instance ${index + 1} health-check URL or path`}
+                      onChange={(event) => setHealthPaths((current) => current.map((path, i) => i === index ? event.target.value : path))}
+                      placeholder="/health (optional)"
+                      type="text"
+                      value={healthPaths[index]}
                     />
                     {instances.length > 1 ? (
                       <button
@@ -252,7 +266,7 @@ export default function Dashboard() {
 
               <div className="dialog-actions">
                 <button className="cancel-button" onClick={closeDialog} type="button">Cancel</button>
-                <button className="submit-platform-button" type="submit">Create platform</button>
+                <button className="submit-platform-button" disabled={saving} type="submit">{saving ? "Saving…" : "Create platform"}</button>
               </div>
             </form>
           </section>
