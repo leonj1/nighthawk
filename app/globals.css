@@ -234,7 +234,21 @@ h1 {
 }
 
 .platform-card {
+  color: inherit;
+  display: block;
   min-width: 0;
+  text-decoration: none;
+}
+
+.platform-card:focus-visible {
+  border-radius: 23px;
+  outline: 3px solid #a093ff;
+  outline-offset: 4px;
+}
+
+.platform-card:hover .platform-tile {
+  filter: brightness(1.16);
+  transform: translateY(-2px);
 }
 
 .platform-tile {
@@ -243,6 +257,7 @@ h1 {
   border: 8px solid #071d0e;
   border-radius: 23px;
   min-width: 0;
+  transition: filter 160ms ease, transform 160ms ease;
 }
 
 .platform-tile--critical {
@@ -473,6 +488,18 @@ h1 {
   padding: 31px 41px 0 34px;
 }
 
+.instances-back-link {
+  color: #96969c;
+  display: inline-block;
+  font-size: 14px;
+  margin: 0 0 18px 9px;
+  text-decoration: none;
+}
+
+.instances-back-link:hover {
+  color: #dedee2;
+}
+
 .instances-panel {
   padding: 27px 46px 0 55px;
 }
@@ -552,9 +579,25 @@ h1 {
   display: grid;
   flex: 0 1 574px;
   gap: 25px;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   min-width: 0;
   width: 574px;
+}
+
+.instances-empty-state {
+  border: 1px solid #323237;
+  border-radius: 14px;
+  color: #8d8d92;
+  margin-top: 28px;
+  max-width: 574px;
+  padding: 24px;
+}
+
+.instances-empty-state a {
+  color: #a093ff;
+  display: inline-block;
+  margin-top: 12px;
+  text-decoration: none;
 }
 
 .instance-column h3 {

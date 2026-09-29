@@ -176,7 +176,12 @@ export default function Dashboard() {
           </div>
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => (
-              <article className="platform-card" key={platform.id}>
+              <Link
+                aria-label={`View instances for ${platform.name}`}
+                className="platform-card"
+                href={`/instances/${encodeURIComponent(platform.id)}`}
+                key={platform.id}
+              >
                 <div
                   aria-label={`${platform.name}: ${platform.status}`}
                   className={`platform-tile platform-tile--${platform.status}`}
@@ -188,7 +193,7 @@ export default function Dashboard() {
                     ? `${platform.instances.length} ${platform.instances.length === 1 ? "instance" : "instances"}`
                     : "No instances"}
                 </p>
-              </article>
+              </Link>
             ))}
           </div>
         </section>
