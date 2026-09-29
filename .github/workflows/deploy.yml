@@ -112,7 +112,7 @@ jobs:
             deploy_status=$(jq -er .status status.json)
             case "$deploy_status" in
               succeeded)
-                jq '{ulid,status,publicDomain,steps}' status.json
+                jq '{ulid,status,publicDomain,failure,rollbackFailure,steps}' status.json
                 domain=$(jq -r '.publicDomain // empty' status.json)
                 {
                   echo "## Railway deployment"
@@ -123,7 +123,7 @@ jobs:
                 } >> "$GITHUB_STEP_SUMMARY"
                 exit 0 ;;
               locked|conflicted|missing-secrets|rolled-back|failed-not-rolled-back|rollback-failed)
-                jq '{ulid,status,publicDomain,steps}' status.json
+                jq '{ulid,status,publicDomain,failure,rollbackFailure,steps}' status.json
                 exit 1 ;;
             esac
             sleep 5
