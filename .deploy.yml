@@ -18,3 +18,5 @@ environments:
     memoryLimitGb: 1
   prod:
     memoryLimitGb: 1
+  production:
+    memoryLimitGb: 1

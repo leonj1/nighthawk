@@ -9,7 +9,8 @@ on:
         options:
           - dev
           - prod
-        default: dev
+          - production
+        default: production
       version:
         description: Artifact version (unused for Railway)
         default: 1.0.0
