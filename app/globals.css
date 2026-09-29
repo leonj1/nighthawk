@@ -1,0 +1,129 @@
+:root {
+  color-scheme: dark;
+  --background: #080b12;
+  --surface: rgba(19, 25, 39, 0.82);
+  --surface-border: rgba(255, 255, 255, 0.1);
+  --text: #f7f8fb;
+  --muted: #9ca6ba;
+  --accent: #8b7cff;
+  --accent-hover: #a093ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.landing-page {
+  align-items: center;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(65, 79, 172, 0.22), transparent 35%),
+    radial-gradient(circle at 85% 80%, rgba(139, 124, 255, 0.16), transparent 30%),
+    var(--background);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+.login-card {
+  align-items: center;
+  backdrop-filter: blur(20px);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 420px;
+  padding: 48px;
+  text-align: center;
+  width: 100%;
+}
+
+.brand-mark {
+  align-items: center;
+  background: linear-gradient(145deg, #a79cff, #6755ee);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(103, 85, 238, 0.32);
+  display: flex;
+  font-size: 24px;
+  font-weight: 700;
+  height: 56px;
+  justify-content: center;
+  width: 56px;
+}
+
+.copy {
+  display: grid;
+  gap: 10px;
+}
+
+.eyebrow {
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(30px, 7vw, 40px);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.copy > p:last-child {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.login-button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 14px 24px;
+  transition: background 160ms ease, transform 160ms ease;
+  width: 100%;
+}
+
+.login-button:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.login-button:focus-visible {
+  outline: 3px solid rgba(160, 147, 255, 0.5);
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 36px 24px;
+  }
+}
