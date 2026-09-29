@@ -3,30 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-type PlatformStatus = "critical" | "warning" | "healthy";
-
-type Platform = {
-  id: string;
-  name: string;
-  instances: string[];
-  status: PlatformStatus;
-};
-
-const platformStatuses: PlatformStatus[] = [
-  "critical",
-  "warning",
-  "warning",
-  ...Array.from({ length: 12 }, () => "healthy" as const),
-];
-
-const defaultPlatforms: Platform[] = platformStatuses.map((status, index) => ({
-  id: `platform-${index + 1}`,
-  name: `Platform ${index + 1}`,
-  instances: [],
-  status,
-}));
-
-const storageKey = "nighthawk-platforms";
+import { dashboardStatus, defaultPlatforms, statusLabels, storageKey, type Platform } from "../lib/status";
 
 function hostnameFromInput(value: string) {
   const candidate = value.trim();
@@ -141,7 +118,6 @@ export default function Dashboard() {
       id: crypto.randomUUID(),
       name: hostname,
       instances: normalizedInstances as string[],
-      status: "healthy",
     };
     const nextPlatforms = [platform, ...createdPlatforms];
 
@@ -174,6 +150,8 @@ export default function Dashboard() {
             </div>
             <span>{platforms.length} total</span>
           </div>
+          <p className="status-legend">Green: successful check · Amber: all instances were offline in this window, now recovered · Red: all instances offline · Gray: unchecked</p>
+          <p className="status-note">Platform 1–15 show sample checks. New platforms await health check data.</p>
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => (
               <Link
@@ -183,8 +161,8 @@ export default function Dashboard() {
                 key={platform.id}
               >
                 <div
-                  aria-label={`${platform.name}: ${platform.status}`}
-                  className={`platform-tile platform-tile--${platform.status}`}
+                  aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}`}
+                  className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
                   role="img"
                 />
                 <h2>{platform.name}</h2>

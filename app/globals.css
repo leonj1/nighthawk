@@ -507,6 +507,9 @@ h1 {
 .platform-summary h1,
 .instances-panel h2,
 .instance-column h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #dedee2;
   font-weight: 400;
   margin: 0;
@@ -561,8 +564,26 @@ h1 {
   width: 100%;
 }
 
-.instance-status--warning {
-  background: #945800;
+.instance-status--critical {
+  background: #ff8a8e;
+}
+
+.platform-tile--unknown,
+.instance-status--unknown {
+  background: #55555d;
+  border-color: #292930;
+}
+
+.status-legend,
+.status-note {
+  color: #9ca6ba;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-top: 16px;
+}
+
+.status-note {
+  margin-top: 6px;
 }
 
 .activity-labels {

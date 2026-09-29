@@ -3,23 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type StoredPlatform = {
-  id: string;
-  name: string;
-  instances: string[];
-};
+import {
+  defaultPlatforms, instanceStatus, platformStatus, recentActivity, statusLabels, storageKey,
+  type CheckStatus, type Platform,
+} from "../lib/status";
 
 type InstancesViewProps = {
   platformId?: string;
 };
-
-const storageKey = "nighthawk-platforms";
-const recentActivity = ["just now", "for 30 mins", "1 hour ago"];
-const platformHistory = ["healthy", "warning", "healthy"] as const;
-const demoInstances = [
-  { name: "Instance A", history: ["healthy", "warning", "healthy"] as const },
-  { name: "Instance B", history: ["healthy", "healthy", "healthy"] as const },
-];
 
 function defaultPlatformName(platformId?: string) {
   if (!platformId) return "Foo";
@@ -36,10 +27,11 @@ function displayInstanceName(instance: string) {
   }
 }
 
-function StatusBar({ status }: { status: "healthy" | "warning" }) {
+function StatusBar({ status }: { status: CheckStatus }) {
   return (
     <span
-      aria-label={status}
+      aria-label={statusLabels[status]}
+      title={statusLabels[status]}
       className={`instance-status instance-status--${status}`}
       role="img"
     />
@@ -47,40 +39,37 @@ function StatusBar({ status }: { status: "healthy" | "warning" }) {
 }
 
 export default function InstancesView({ platformId }: InstancesViewProps) {
-  const [platformName, setPlatformName] = useState(() => defaultPlatformName(platformId));
-  const [instanceUrls, setInstanceUrls] = useState<string[] | null>(
-    platformId ? [] : demoInstances.map((instance) => instance.name),
-  );
+  const [storedPlatform, setStoredPlatform] = useState<Platform | null>(null);
 
   useEffect(() => {
+    setStoredPlatform(null);
     if (!platformId) return;
 
     try {
       const stored = window.localStorage.getItem(storageKey);
-      const platforms = stored ? (JSON.parse(stored) as StoredPlatform[]) : [];
-      const platform = platforms.find((candidate) => candidate.id === platformId);
-
-      if (platform) {
-        setPlatformName(platform.name);
-        setInstanceUrls(platform.instances);
-      }
+      const platforms = stored ? (JSON.parse(stored) as Platform[]) : [];
+      setStoredPlatform(platforms.find((candidate) => candidate.id === platformId) ?? null);
     } catch {
-      setInstanceUrls([]);
+      setStoredPlatform(null);
     }
   }, [platformId]);
 
-  const instances = platformId
-    ? (instanceUrls ?? []).map((instance) => ({
-        name: displayInstanceName(instance),
-        history: ["healthy", "healthy", "healthy"] as const,
-      }))
-    : demoInstances;
+  const platform = (storedPlatform?.id === platformId ? storedPlatform : null)
+    ?? defaultPlatforms.find((candidate) => candidate.id === (platformId ?? "platform-2"))
+    ?? { id: platformId ?? "", name: defaultPlatformName(platformId), instances: [] };
+  const instances = platform.instances.map((instance) => ({
+    name: displayInstanceName(instance),
+    history: recentActivity.map((_, index) => instanceStatus(platform, instance, index)),
+  }));
+  const platformHistory = recentActivity.map((_, index) => platformStatus(platform, index));
 
   return (
     <main className="instances-page">
       <section className="platform-summary" aria-labelledby="platform-name">
         {platformId ? <Link className="instances-back-link" href="/dashboard">← Platforms</Link> : null}
-        <h1 id="platform-name">Platform: {platformName}</h1>
+        <h1 id="platform-name">Platform: {platform.name}</h1>
+        <p className="status-legend">Green: successful check · Red: offline · Gray: unchecked</p>
+        {defaultPlatforms.includes(platform) ? <p className="status-note">Sample health checks</p> : null}
         <div className="platform-history">
           <div className="status-stack">
             {platformHistory.map((status, index) => (
