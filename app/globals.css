@@ -169,6 +169,117 @@ h1 {
   background: #965900;
 }
 
+.instances-page {
+  background: #111111;
+  color: #dedee2;
+  display: grid;
+  grid-template-columns: 33% minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 51px 0 33px;
+}
+
+.platform-summary,
+.instances-panel {
+  min-width: 0;
+}
+
+.platform-summary {
+  border-right: 2px solid #dedee2;
+  padding: 31px 41px 0 34px;
+}
+
+.instances-panel {
+  padding: 27px 46px 0 55px;
+}
+
+.platform-summary h1,
+.instances-panel h2,
+.instance-column h3 {
+  color: #dedee2;
+  font-weight: 400;
+  margin: 0;
+}
+
+.platform-summary h1 {
+  font-size: 40px;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  margin-left: 9px;
+}
+
+.instances-panel h2 {
+  font-size: 40px;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.platform-history,
+.instances-overview {
+  align-items: start;
+  display: flex;
+}
+
+.platform-history {
+  gap: 15px;
+  margin-top: 28px;
+}
+
+.instances-overview {
+  gap: 31px;
+  margin-left: 33px;
+  margin-top: 27px;
+}
+
+.status-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.platform-history .status-stack {
+  flex: 1;
+  min-width: 0;
+}
+
+.instance-status {
+  background: #004d12;
+  border: 8px solid #06240e;
+  border-radius: 15px;
+  display: block;
+  height: 54px;
+  width: 100%;
+}
+
+.instance-status--warning {
+  background: #945800;
+}
+
+.activity-labels {
+  display: grid;
+  flex: none;
+  font-size: 32px;
+  gap: 18px;
+  line-height: 1.15;
+  padding-top: 12px;
+  white-space: nowrap;
+}
+
+.instance-columns {
+  display: grid;
+  flex: 0 1 574px;
+  gap: 25px;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  min-width: 0;
+  width: 574px;
+}
+
+.instance-column h3 {
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 18px 4px;
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 36px 24px;
@@ -191,5 +302,77 @@ h1 {
   .platform-tile {
     border-width: 6px;
     border-radius: 18px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .instances-page {
+    grid-template-columns: 1fr;
+    padding: 32px 24px 60px;
+  }
+
+  .platform-summary {
+    border-bottom: 2px solid #dedee2;
+    border-right: 0;
+    padding: 0 0 36px;
+  }
+
+  .instances-panel {
+    padding: 36px 0 0;
+  }
+
+  .platform-history {
+    max-width: 620px;
+  }
+
+  .instances-overview {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .platform-summary h1,
+  .instances-panel h2 {
+    font-size: 34px;
+  }
+
+  .platform-history,
+  .instances-overview {
+    gap: 16px;
+  }
+
+  .instance-columns {
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(110px, 1fr));
+  }
+
+  .instance-column h3,
+  .activity-labels {
+    font-size: 21px;
+  }
+
+  .activity-labels {
+    gap: 25px;
+    padding-top: 15px;
+  }
+
+  .instance-status {
+    border-width: 6px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  .instances-page {
+    padding-inline: 16px;
+  }
+
+  .instances-overview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .instances-overview .activity-labels {
+    display: none;
   }
 }
