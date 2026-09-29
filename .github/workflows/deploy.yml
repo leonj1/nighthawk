@@ -1,0 +1,132 @@
+name: Deploy through the API
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Railway environment to deploy
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      version:
+        description: Artifact version (unused for Railway)
+        default: 1.0.0
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_TYPE: railway
+      ENVIRONMENT: ${{ inputs.environment }}
+      VERSION: ${{ inputs.version }}
+      DEPLOYER_URL: ${{ vars.DEPLOYER_URL }}
+      TOKEN_EXCHANGE_URL: ${{ vars.TOKEN_EXCHANGE_URL }}
+      OIDC_AUDIENCE: ${{ vars.OIDC_AUDIENCE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Parse the Manifest
+        run: |
+          npm install --prefix "$RUNNER_TEMP/deploy-tools" yaml@2
+          NODE_PATH="$RUNNER_TEMP/deploy-tools/node_modules" node - <<'JS'
+          const fs = require('node:fs');
+          const manifest = require('yaml').parse(fs.readFileSync('.deploy.yml', 'utf8'));
+          fs.writeFileSync('manifest.json', JSON.stringify(manifest));
+          fs.appendFileSync(process.env.GITHUB_ENV, `SERVICE=${manifest.service}\n`);
+          JS
+      - name: Build
+        run: |
+          set -euo pipefail
+          case "$SERVICE_TYPE" in
+            function) zip function.zip index.js ;;
+            container)
+              docker build -t app:deploy .
+              docker save app:deploy | gzip > image.tar.gz ;;
+            static)
+              npm ci
+              npm run build -- --base=/$SERVICE-$ENVIRONMENT/ ;;
+            railway) echo "Railway builds the repository" ;;
+            *) exit 1 ;;
+          esac
+      - name: Authenticate and publish
+        run: |
+          set -euo pipefail
+          github_jwt=$(curl -fsSG \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            --data-urlencode "audience=$OIDC_AUDIENCE" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -er .value)
+          jwt=$(jq -n --arg token "$github_jwt" '{github_token:$token}' | \
+            curl -fsS -X POST "$TOKEN_EXCHANGE_URL/token" \
+              -H 'Content-Type: application/json' --data-binary @- | jq -er .access_token)
+          echo "::add-mask::$jwt"
+          artifact=''
+          case "$SERVICE_TYPE" in
+            function)
+              curl -fsS -X POST "$DEPLOYER_URL/artifacts/$VERSION" \
+                -H "Authorization: Bearer $jwt" -H 'Content-Type: application/zip' \
+                --data-binary @function.zip > published.json
+              artifact="$VERSION" ;;
+            container)
+              curl -fsS -X POST "$DEPLOYER_URL/images/$VERSION" \
+                -H "Authorization: Bearer $jwt" -H 'Content-Type: application/gzip' \
+                --data-binary @image.tar.gz > published.json
+              artifact=$(jq -er .tag published.json) ;;
+            static)
+              python3 - <<'PY'
+          import base64, json, mimetypes, os
+          from pathlib import Path
+          root = Path('dist')
+          assert (root / 'index.html').is_file(), 'Missing dist/index.html'
+          files = [{
+              'path': p.relative_to(root).as_posix(),
+              'contentType': mimetypes.guess_type(p.name)[0] or 'application/octet-stream',
+              'content': base64.b64encode(p.read_bytes()).decode('ascii'),
+          } for p in sorted(root.rglob('*')) if p.is_file()]
+          Path('site.json').write_text(json.dumps({'ref': os.environ['GITHUB_SHA'], 'files': files}))
+          PY
+              curl -fsS -X POST "$DEPLOYER_URL/site-artifacts/$VERSION" \
+                -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' \
+                --data-binary @site.json > published.json
+              artifact=$(jq -er .prefix published.json) ;;
+          esac
+          jq -n --slurpfile manifest manifest.json \
+            --arg repository "$GITHUB_REPOSITORY" --arg ref "$GITHUB_SHA" \
+            --arg artifact "$artifact" --arg key "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            '{manifest:$manifest[0],repository:$repository,ref:$ref,artifact:$artifact,idempotencyKey:$key}' > deploy.json
+          deploy_url="$DEPLOYER_URL/services/$SERVICE/environments/$ENVIRONMENT/deploys"
+          ulid=$(curl -fsS -X POST "$deploy_url" \
+            -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' \
+            --data-binary @deploy.json | jq -er .ulid)
+          echo "Deploy: $ulid"
+          for attempt in $(seq 1 360); do
+            curl -fsS -H "Authorization: Bearer $jwt" "$deploy_url/$ulid" > status.json
+            deploy_status=$(jq -er .status status.json)
+            case "$deploy_status" in
+              succeeded)
+                jq '{ulid,status,publicDomain,steps}' status.json
+                domain=$(jq -r '.publicDomain // empty' status.json)
+                {
+                  echo "## Railway deployment"
+                  echo
+                  echo "- Deploy: \`$ulid\`"
+                  echo "- Status: \`$deploy_status\`"
+                  if [ -n "$domain" ]; then echo "- URL: https://$domain"; fi
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0 ;;
+              locked|conflicted|missing-secrets|rolled-back|failed-not-rolled-back|rollback-failed)
+                jq '{ulid,status,publicDomain,steps}' status.json
+                exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "Timed out waiting for Deploy $ulid"
+          exit 1

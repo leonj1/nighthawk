@@ -1,0 +1,20 @@
+version: 1
+service: nighthawk
+type: container
+target: railway
+
+spec:
+  replicas: 1
+  containerPort: 8080
+  artifact:
+    dockerfilePath: Dockerfile
+  http:
+    healthCheck:
+      path: /healthz
+  rollback: true
+
+environments:
+  dev:
+    memoryLimitGb: 1
+  prod:
+    memoryLimitGb: 1

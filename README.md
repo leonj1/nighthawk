@@ -11,8 +11,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) for the landing page. The
-health check is available at [http://localhost:3000/health](http://localhost:3000/health)
-and returns:
+health checks are available at [http://localhost:3000/health](http://localhost:3000/health)
+and [http://localhost:3000/healthz](http://localhost:3000/healthz). Both return:
 
 ```json
 { "status": "ok" }
@@ -24,3 +24,8 @@ and returns:
 npm run typecheck
 npm run build
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the Railway deployment plan and the
+Deployer-based release workflow.

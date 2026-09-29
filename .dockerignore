@@ -1,0 +1,8 @@
+.git
+.github
+.next
+.cw-servers.json
+.cw-uploads
+node_modules
+npm-debug.log*
+README.md
