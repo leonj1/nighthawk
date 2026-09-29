@@ -280,6 +280,170 @@ h1 {
   margin: 0 0 18px 4px;
 }
 
+.events-page {
+  background: #111111;
+  color: #d9d9dc;
+  display: grid;
+  grid-template-columns: 21.5% minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 30px 25px 72px 36px;
+}
+
+.events-instance {
+  border-right: 2px solid #d9d9dc;
+  min-width: 0;
+  padding: 29px 38px 0 7px;
+}
+
+.events-instance h1,
+.events-panel h2,
+.event-item h3 {
+  margin: 0;
+}
+
+.events-instance h1,
+.events-panel h2 {
+  color: #dedee2;
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.events-activity {
+  align-items: start;
+  display: flex;
+  gap: 15px;
+  margin-top: 25px;
+}
+
+.events-status-stack,
+.events-activity-labels {
+  display: grid;
+}
+
+.events-status-stack {
+  flex: 1;
+  gap: 5px;
+  min-width: 0;
+}
+
+.event-status {
+  background: #004d12;
+  border: 7px solid #06240e;
+  border-radius: 13px;
+  display: block;
+  height: 47px;
+  width: 100%;
+}
+
+.event-status--warning {
+  background: #945800;
+}
+
+.events-activity-labels {
+  font-size: 27px;
+  font-weight: 600;
+  gap: 15px;
+  line-height: 1.2;
+  padding-top: 10px;
+  white-space: nowrap;
+}
+
+.events-panel {
+  min-width: 0;
+  padding: 23px 0 0 48px;
+}
+
+.events-feed {
+  background: #191919;
+  margin-top: 29px;
+  padding: 26px 28px 10px;
+}
+
+.events-date {
+  color: #858386;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.events-list {
+  margin-top: 31px;
+}
+
+.event-item {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 14px minmax(0, 1fr);
+  padding: 0 0 26px;
+}
+
+.event-item + .event-item {
+  border-top: 2px solid #353535;
+  padding-top: 26px;
+}
+
+.event-dot {
+  background: #3ac55b;
+  border-radius: 50%;
+  height: 14px;
+  margin-top: 8px;
+  width: 14px;
+}
+
+.event-dot--inactive {
+  background: #979797;
+}
+
+.event-content {
+  min-width: 0;
+}
+
+.event-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.event-item h3 {
+  color: #dedee2;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.event-heading time {
+  color: #969497;
+  flex: none;
+  font-size: 22px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.event-description,
+.event-meta {
+  color: #858386;
+  font-size: 22px;
+  line-height: 1.55;
+}
+
+.event-description {
+  margin-top: 5px;
+}
+
+.event-meta {
+  margin-top: 8px;
+}
+
+.event-meta span {
+  margin: 0 7px;
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 36px 24px;
@@ -306,22 +470,26 @@ h1 {
 }
 
 @media (max-width: 1050px) {
-  .instances-page {
+  .instances-page,
+  .events-page {
     grid-template-columns: 1fr;
     padding: 32px 24px 60px;
   }
 
-  .platform-summary {
+  .platform-summary,
+  .events-instance {
     border-bottom: 2px solid #dedee2;
     border-right: 0;
     padding: 0 0 36px;
   }
 
-  .instances-panel {
+  .instances-panel,
+  .events-panel {
     padding: 36px 0 0;
   }
 
-  .platform-history {
+  .platform-history,
+  .events-activity {
     max-width: 620px;
   }
 
@@ -332,7 +500,9 @@ h1 {
 
 @media (max-width: 700px) {
   .platform-summary h1,
-  .instances-panel h2 {
+  .instances-panel h2,
+  .events-instance h1,
+  .events-panel h2 {
     font-size: 34px;
   }
 
@@ -360,11 +530,59 @@ h1 {
     border-width: 6px;
     height: 48px;
   }
+
+  .events-feed {
+    padding: 24px 20px 4px;
+  }
+
+  .events-activity-labels {
+    font-size: 21px;
+    gap: 22px;
+    padding-top: 12px;
+  }
+
+  .event-status {
+    border-width: 6px;
+    height: 44px;
+  }
+
+  .event-item {
+    gap: 14px;
+  }
+
+  .event-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .event-item h3 {
+    font-size: 21px;
+  }
+
+  .event-heading time,
+  .event-description,
+  .event-meta {
+    font-size: 17px;
+  }
 }
 
 @media (max-width: 480px) {
   .instances-page {
     padding-inline: 16px;
+  }
+
+  .events-page {
+    padding-inline: 16px;
+  }
+
+  .events-activity {
+    gap: 10px;
+  }
+
+  .events-feed {
+    margin-top: 24px;
+    padding-inline: 15px;
   }
 
   .instances-overview {
