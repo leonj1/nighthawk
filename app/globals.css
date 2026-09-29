@@ -131,26 +131,110 @@ h1 {
   color: #dedee2;
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+.dashboard-header {
+  align-items: center;
+  background: rgba(17, 17, 17, 0.94);
+  border-bottom: 1px solid #2d2d2d;
+  display: flex;
+  justify-content: space-between;
+  min-height: 78px;
+  padding: 14px 60px;
+}
+
+.dashboard-brand {
+  align-items: center;
+  color: #f4f4f4;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 700;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.dashboard-brand-mark {
+  align-items: center;
+  background: #8b7cff;
+  border-radius: 10px;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.create-platform-button,
+.submit-platform-button {
+  align-items: center;
+  background: #8b7cff;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: center;
+  padding: 12px 17px;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.create-platform-button span {
+  font-size: 21px;
+  font-weight: 400;
+  line-height: 0;
+}
+
+.create-platform-button:hover,
+.submit-platform-button:hover {
+  background: #a093ff;
+  transform: translateY(-1px);
+}
+
+.dashboard-content {
   padding: 45px 60px 80px;
 }
 
 .platforms {
-  max-width: 550px;
+  max-width: 670px;
 }
 
-.platforms h1 {
+.platforms-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px 0 15px;
+}
+
+.platforms-heading h1 {
   font-size: 40px;
   font-weight: 400;
   letter-spacing: -0.03em;
   line-height: 1.15;
-  margin-left: 15px;
+}
+
+.platforms-heading p {
+  color: #8d8d92;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-top: 7px;
+}
+
+.platforms-heading > span {
+  color: #8d8d92;
+  font-size: 14px;
+  padding-bottom: 3px;
 }
 
 .platform-grid {
   display: grid;
-  gap: 24px 6px;
+  gap: 26px 12px;
   grid-template-columns: repeat(5, 1fr);
-  margin-top: 39px;
+  margin-top: 32px;
+}
+
+.platform-card {
+  min-width: 0;
 }
 
 .platform-tile {
@@ -167,6 +251,206 @@ h1 {
 
 .platform-tile--warning {
   background: #965900;
+}
+
+.platform-card h2,
+.platform-card p {
+  overflow: hidden;
+  padding-inline: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-card h2 {
+  color: #dedee2;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 9px 0 0;
+}
+
+.platform-card p {
+  color: #77777d;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.dialog-backdrop {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 20;
+}
+
+.platform-dialog {
+  background: #181818;
+  border: 1px solid #373737;
+  border-radius: 18px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+  max-height: calc(100dvh - 48px);
+  max-width: 580px;
+  overflow-y: auto;
+  padding: 28px;
+  width: 100%;
+}
+
+.dialog-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.dialog-eyebrow {
+  color: #a093ff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dialog-heading h2 {
+  color: #f0f0f2;
+  font-size: 29px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 5px 0 0;
+}
+
+.dialog-close,
+.remove-instance-button {
+  background: transparent;
+  border: 0;
+  color: #8f8f95;
+  cursor: pointer;
+}
+
+.dialog-close {
+  font-size: 28px;
+  line-height: 1;
+  padding: 2px 5px;
+}
+
+.dialog-description {
+  color: #96969c;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.platform-form {
+  display: grid;
+  margin-top: 25px;
+}
+
+.platform-form label {
+  color: #d8d8dc;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.platform-form input {
+  background: #101010;
+  border: 1px solid #3a3a3a;
+  border-radius: 9px;
+  color: #f0f0f2;
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 12px 13px;
+  width: 100%;
+}
+
+.platform-form input:focus {
+  border-color: #8b7cff;
+  box-shadow: 0 0 0 3px rgba(139, 124, 255, 0.16);
+}
+
+.platform-form input::placeholder {
+  color: #606066;
+}
+
+.instance-field-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 22px;
+}
+
+.instance-field-heading label {
+  margin: 0;
+}
+
+.add-instance-button {
+  background: transparent;
+  border: 0;
+  color: #a093ff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 0;
+}
+
+.field-hint {
+  color: #77777d;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.instance-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.instance-field {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) 28px;
+}
+
+.instance-field:only-child {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.remove-instance-button {
+  font-size: 22px;
+  padding: 0;
+}
+
+.form-error {
+  background: rgba(255, 138, 142, 0.08);
+  border: 1px solid rgba(255, 138, 142, 0.3);
+  border-radius: 8px;
+  color: #ff9da0;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 16px;
+  padding: 10px 12px;
+}
+
+.dialog-actions {
+  border-top: 1px solid #303030;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 26px;
+  padding-top: 20px;
+}
+
+.cancel-button {
+  background: transparent;
+  border: 1px solid #454545;
+  border-radius: 10px;
+  color: #d0d0d4;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 11px 17px;
 }
 
 .instances-page {
@@ -449,13 +733,29 @@ h1 {
     padding: 36px 24px;
   }
 
-  .dashboard-page {
-    padding: 36px 24px 60px;
+  .dashboard-header {
+    min-height: 68px;
+    padding: 12px 16px;
   }
 
-  .platforms h1 {
+  .dashboard-brand > span:last-child {
+    display: none;
+  }
+
+  .dashboard-content {
+    padding: 34px 16px 60px;
+  }
+
+  .platforms-heading {
+    margin-inline: 7px;
+  }
+
+  .platforms-heading h1 {
     font-size: 34px;
-    margin-left: 8px;
+  }
+
+  .platforms-heading > span {
+    display: none;
   }
 
   .platform-grid {
@@ -466,6 +766,36 @@ h1 {
   .platform-tile {
     border-width: 6px;
     border-radius: 18px;
+  }
+
+  .platform-card h2,
+  .platform-card p {
+    padding-inline: 5px;
+  }
+
+  .platform-card h2 {
+    font-size: 11px;
+  }
+
+  .platform-card p {
+    font-size: 10px;
+  }
+
+  .dialog-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .platform-dialog {
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    max-height: calc(100dvh - 24px);
+    padding: 24px 20px;
+  }
+
+  .dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 
