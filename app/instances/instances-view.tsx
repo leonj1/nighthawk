@@ -6,8 +6,8 @@ import { usePlatforms } from "../lib/use-platforms";
 import { checkTime, relativeCheckTime } from "../lib/check-time";
 
 import {
-  instanceStatus, platformStatus, checkHistoryIndices, statusLabels,
-  type CheckStatus,
+  instanceStateHistory, platformStatus, checkHistoryIndices, statusLabels,
+  type DashboardStatus,
 } from "../lib/status";
 
 type InstancesViewProps = {
@@ -29,11 +29,12 @@ function displayInstanceName(instance: string) {
   }
 }
 
-function StatusBar({ status }: { status: CheckStatus }) {
+function StatusBar({ status }: { status: DashboardStatus }) {
+  const label = status === "warning" ? "Offline" : statusLabels[status];
   return (
     <span
-      aria-label={statusLabels[status]}
-      title={statusLabels[status]}
+      aria-label={label}
+      title={label}
       className={`instance-status instance-status--${status}`}
       role="img"
     />
@@ -54,7 +55,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
   const instances = platform.instances.map((instance) => ({
     name: displayInstanceName(instance),
     healthUrl: platform.healthUrls?.[instance] ?? instance,
-    history: checkHistoryIndices.map((index) => instanceStatus(platform, instance, index)),
+    history: instanceStateHistory(platform, instance),
   }));
   const platformHistory = checkHistoryIndices.map((index) => platformStatus(platform, index));
   const activityLabels = checkHistoryIndices.map((index) => {
@@ -71,7 +72,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
       <section className="platform-summary" aria-labelledby="platform-name">
         {platformId ? <Link className="instances-back-link" href="/dashboard">← Platforms</Link> : null}
         <h1 id="platform-name">Platform: {platform.name}</h1>
-        <p className="status-legend">Green: successful check · Red: offline · Gray: unchecked</p>
+        <p className="status-legend">Green: successful check · Amber: instance offline · Red: platform offline · Gray: unchecked</p>
         <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <div className="platform-history">
@@ -88,6 +89,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
 
       <section className="instances-panel" aria-labelledby="instances-heading">
         <h2 id="instances-heading">Instances</h2>
+        <p className="status-note">State changes, newest first. Repeated results keep the same box.</p>
         {instances.length ? (
           <div className="instances-overview">
             <div className="instance-columns">
@@ -96,15 +98,19 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
                   <h3 title={instance.healthUrl}>{instance.name}</h3>
                   <p className="status-note">{instance.healthUrl}</p>
                   <div className="status-stack">
-                    {instance.history.map((status, index) => (
-                      <StatusBar key={`${status}-${index}`} status={status} />
+                    {instance.history.map(({ status, timestamp }, index) => (
+                      <div className="instance-transition" key={index}>
+                        <StatusBar status={status} />
+                        {timestamp && Number.isFinite(Date.parse(timestamp)) ? (
+                          <time dateTime={timestamp} title={new Date(timestamp).toLocaleString(undefined, { timeZoneName: "short" })}>
+                            {now !== null ? relativeCheckTime(timestamp, now) : "Loading time…"}
+                          </time>
+                        ) : <span>Time unavailable</span>}
+                      </div>
                     ))}
                   </div>
                 </article>
               ))}
-            </div>
-            <div className="activity-labels" aria-label="Activity times">
-              {activityLabels}
             </div>
           </div>
         ) : (

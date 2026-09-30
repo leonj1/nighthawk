@@ -568,6 +568,17 @@ h1 {
   background: #ff8a8e;
 }
 
+.instance-status--warning {
+  background: #f5b942;
+}
+
+.instance-transition {
+  display: grid;
+  gap: 4px;
+  color: #9ca6ba;
+  font-size: 13px;
+}
+
 .platform-tile--unknown,
 .instance-status--unknown {
   background: #55555d;

@@ -44,6 +44,24 @@ npm run typecheck
 npm run build
 ```
 
+Run the Gherkin acceptance specification for instance state changes with:
+
+```bash
+npm run test:bdd
+```
+
+`tests/features/instance-state-history.feature` specifies one initial gray box,
+green for online, amber for offline, and one additional box per state change.
+Repeated identical results must not add boxes. The initial unknown state is
+retained in the expected history, ordered newest first.
+
+These executable acceptance tests cover the implemented instance transition
+history. Run the BDD suite separately from `npm test` to verify this behavior.
+It renders the actual instance component with supplied check observations and
+asserts its status classes and box counts; it does not test the background
+scheduler, persistence, browser polling, or computed CSS colors. The rendering
+harness uses Next's bundled SWC compiler and may need updating with Next upgrades.
+
 ## Deployment
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the Railway deployment plan and the

@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:bdd": "node --experimental-strip-types node_modules/@cucumber/cucumber/bin/cucumber.js tests/features/*.feature --import tests/features/steps/*.mjs"
   },
   "dependencies": {
     "next": "^16.3.6",
@@ -15,6 +16,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^13.2.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

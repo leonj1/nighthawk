@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Platform } from "../status.ts";
+import { instanceStateHistory } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
 import { probe } from "./probe.ts";
 
@@ -48,10 +49,15 @@ export async function tick() {
           ]);
         } catch { return false; }
       }));
+      const checkedAt = new Date().toISOString();
+      platform.stateHistory = Object.fromEntries(platform.instances.map((instance, index) => {
+        const history = instanceStateHistory(platform, instance);
+        const status = results[index] ? "healthy" as const : "warning" as const;
+        return [instance, history[0].status === status ? history : [{ status, timestamp: checkedAt }, ...history]];
+      }));
       platform.checks = Object.fromEntries(platform.instances.map((instance, index) => [instance,
         [results[index], ...(platform.checks?.[instance] ?? [])].slice(0, 3),
       ]));
-      const checkedAt = new Date().toISOString();
       platform.checkTimes = [checkedAt, ...(platform.checkTimes ?? [platform.checkedAt ?? null])].slice(0, 3);
       platform.checkedAt = checkedAt;
     }));
@@ -78,7 +84,11 @@ export function validatePlatform(value: unknown): Platform {
     if (typeof endpoint !== "string" || endpoint.length > 2048) throw new Error("Invalid health-check URL.");
     return [instance, healthUrl(instance, endpoint)];
   }));
-  return { id: input.id, name: input.name.trim(), instances, healthUrls };
+  const createdAt = new Date().toISOString();
+  return {
+    id: input.id, name: input.name.trim(), instances, healthUrls, createdAt,
+    stateHistory: Object.fromEntries(instances.map((instance) => [instance, [{ status: "unknown", timestamp: createdAt }]])),
+  };
 }
 
 export async function addPlatforms(inputs: unknown[]) {
