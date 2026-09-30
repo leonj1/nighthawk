@@ -1,5 +1,6 @@
 export type CheckStatus = "healthy" | "critical" | "unknown";
 export type DashboardStatus = CheckStatus | "warning";
+export type PlatformState = { status: CheckStatus; timestamp: string | null };
 export type InstanceState = { status: "healthy" | "warning" | "unknown"; timestamp: string | null };
 
 export type Platform = {
@@ -10,6 +11,7 @@ export type Platform = {
   checkedAt?: string;
   checkTimes?: (string | null)[];
   createdAt?: string;
+  platformStateHistory?: PlatformState[];
   stateHistory?: Record<string, InstanceState[]>;
   // Newest first. Each index represents the same check window for every instance.
   checks?: Record<string, (boolean | null)[]>;
@@ -44,6 +46,21 @@ export function platformStatus(platform: Platform, index = 0): CheckStatus {
   if (statuses.includes("healthy")) return "healthy";
   if (statuses.length && statuses.every((status) => status === "critical")) return "critical";
   return "unknown";
+}
+
+// Keep the initial unknown state and only add a box when aggregate health changes.
+// Older records can recover only the checks still retained on disk.
+export function platformStateHistory(platform: Platform): PlatformState[] {
+  if (platform.platformStateHistory?.length) return platform.platformStateHistory;
+  const history: PlatformState[] = [{ status: "unknown", timestamp: platform.createdAt ?? null }];
+  const count = Math.max(0, ...platform.instances.map((instance) => platform.checks?.[instance]?.length ?? 0));
+  for (let index = count - 1; index >= 0; index--) {
+    const status = platformStatus(platform, index);
+    if (history[0].status !== status) {
+      history.unshift({ status, timestamp: platform.checkTimes?.[index] ?? (index === 0 ? platform.checkedAt ?? null : null) });
+    }
+  }
+  return history;
 }
 
 export function dashboardStatus(platform: Platform): DashboardStatus {

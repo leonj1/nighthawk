@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePlatforms } from "../lib/use-platforms";
-import { checkTime, relativeCheckTime } from "../lib/check-time";
+import { relativeCheckTime } from "../lib/check-time";
 
 import {
-  instanceStateHistory, platformStatus, checkHistoryIndices, statusLabels,
+  instanceStateHistory, platformStateHistory, statusLabels,
   type DashboardStatus,
 } from "../lib/status";
 
@@ -57,9 +57,8 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
     healthUrl: platform.healthUrls?.[instance] ?? instance,
     history: instanceStateHistory(platform, instance),
   }));
-  const platformHistory = checkHistoryIndices.map((index) => platformStatus(platform, index));
-  const activityLabels = checkHistoryIndices.map((index) => {
-    const timestamp = checkTime(platform, index);
+  const platformHistory = platformStateHistory(platform);
+  const activityLabels = platformHistory.map(({ timestamp }, index) => {
     return timestamp && now !== null ? (
       <time key={index} dateTime={timestamp} title={new Date(timestamp).toLocaleString(undefined, { timeZoneName: "short" })}>
         {relativeCheckTime(timestamp, now)}
@@ -77,7 +76,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <div className="platform-history">
           <div className="status-stack">
-            {platformHistory.map((status, index) => (
+            {platformHistory.map(({ status }, index) => (
               <StatusBar key={`${status}-${index}`} status={status} />
             ))}
           </div>

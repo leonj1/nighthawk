@@ -21,7 +21,7 @@ const { code: compiled } = await transform(source, {
 
 // Render the real view and real status functions, replacing only data fetching
 // and Next navigation. No network, running Next server, or real timers required.
-function boxes(platform) {
+function boxes(platform, scope = "instance") {
   const exports = {};
   runInNewContext(compiled, {
     exports,
@@ -34,7 +34,9 @@ function boxes(platform) {
     },
   });
   const html = renderToStaticMarkup(React.createElement(exports.default, { platformId: platform.id }));
-  const article = html.match(/<article\b[^>]*class="instance-column"[^>]*>([\s\S]*?)<\/article>/)?.[1];
+  const article = scope === "platform"
+    ? html.match(/<section\b[^>]*class="platform-summary"[^>]*>([\s\S]*?)<\/section>/)?.[1]
+    : html.match(/<article\b[^>]*class="instance-column"[^>]*>([\s\S]*?)<\/article>/)?.[1];
   assert.ok(article, "The instance must be rendered in the real detail view");
   return [...article.matchAll(/class="instance-status instance-status--([a-z]+)"/g)].map((match) => match[1]);
 }
@@ -69,4 +71,13 @@ Then("the instance boxes from newest to oldest are {string}", function (colors) 
     return colorStatus[color];
   });
   assert.deepEqual(boxes(this.platform), expected);
+});
+
+Then("the platform boxes from newest to oldest are {string}", function (colors) {
+  const expected = colors.split(", ").map((color) => {
+    const statuses = { ...colorStatus, red: "critical" };
+    assert.ok(statuses[color], `Unsupported color: ${color}`);
+    return statuses[color];
+  });
+  assert.deepEqual(boxes(this.platform, "platform"), expected);
 });
