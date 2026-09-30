@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePlatforms } from "../lib/use-platforms";
+import { checkTime, relativeCheckTime } from "../lib/check-time";
 
 import {
-  instanceStatus, platformStatus, recentActivity, statusLabels,
+  instanceStatus, platformStatus, checkHistoryIndices, statusLabels,
   type CheckStatus,
 } from "../lib/status";
 
@@ -40,15 +42,29 @@ function StatusBar({ status }: { status: CheckStatus }) {
 
 export default function InstancesView({ platformId }: InstancesViewProps) {
   const { platforms, error } = usePlatforms();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const platform = platforms.find((candidate) => candidate.id === platformId)
     ?? (!platformId ? platforms[0] : undefined)
     ?? { id: platformId ?? "", name: defaultPlatformName(platformId), instances: [] };
   const instances = platform.instances.map((instance) => ({
     name: displayInstanceName(instance),
     healthUrl: platform.healthUrls?.[instance] ?? instance,
-    history: recentActivity.map((_, index) => instanceStatus(platform, instance, index)),
+    history: checkHistoryIndices.map((index) => instanceStatus(platform, instance, index)),
   }));
-  const platformHistory = recentActivity.map((_, index) => platformStatus(platform, index));
+  const platformHistory = checkHistoryIndices.map((index) => platformStatus(platform, index));
+  const activityLabels = checkHistoryIndices.map((index) => {
+    const timestamp = checkTime(platform, index);
+    return timestamp && now !== null ? (
+      <time key={index} dateTime={timestamp} title={new Date(timestamp).toLocaleString(undefined, { timeZoneName: "short" })}>
+        {relativeCheckTime(timestamp, now)}
+      </time>
+    ) : <span key={index}>Time unavailable</span>;
+  });
 
   return (
     <main className="instances-page">
@@ -65,9 +81,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
             ))}
           </div>
           <div className="activity-labels" aria-label="Activity times">
-            {recentActivity.map((activity) => (
-              <span key={activity}>{activity}</span>
-            ))}
+            {activityLabels}
           </div>
         </div>
       </section>
@@ -90,9 +104,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
               ))}
             </div>
             <div className="activity-labels" aria-label="Activity times">
-              {recentActivity.map((activity) => (
-                <span key={activity}>{activity}</span>
-              ))}
+              {activityLabels}
             </div>
           </div>
         ) : (

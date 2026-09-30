@@ -7,12 +7,13 @@ export type Platform = {
   instances: string[];
   healthUrls?: Record<string, string>;
   checkedAt?: string;
+  checkTimes?: (string | null)[];
   // Newest first. Each index represents the same check window for every instance.
   checks?: Record<string, (boolean | null)[]>;
 };
 
 export const storageKey = "nighthawk-platforms";
-export const recentActivity = ["Latest check", "Previous check", "2 checks ago"];
+export const checkHistoryIndices = [0, 1, 2];
 
 export function instanceStatus(platform: Platform, instance: string, index = 0): CheckStatus {
   const result = platform.checks?.[instance]?.[index];
@@ -29,7 +30,7 @@ export function platformStatus(platform: Platform, index = 0): CheckStatus {
 export function dashboardStatus(platform: Platform): DashboardStatus {
   const current = platformStatus(platform);
   if (current !== "healthy") return current;
-  return recentActivity.some((_, index) => index > 0 && platformStatus(platform, index) === "critical")
+  return checkHistoryIndices.some((index) => index > 0 && platformStatus(platform, index) === "critical")
     ? "warning"
     : "healthy";
 }

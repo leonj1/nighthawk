@@ -35,12 +35,23 @@ test("monitor imports instances, rejects invalid input, persists checks and boun
     await addPlatforms([input]);
     // Allow the startup tick to finish before triggering deterministic cycles.
     while (globalThis.nighthawkMonitor.running) await new Promise((resolve) => setTimeout(resolve, 5));
+    const legacy = (await getPlatforms())[0];
+    legacy.checkedAt = "2026-01-01T00:00:00.000Z";
+    delete legacy.checkTimes;
+    await tick();
+    assert.deepEqual(legacy.checkTimes, [legacy.checkedAt, "2026-01-01T00:00:00.000Z"]);
+    const previousTime = legacy.checkedAt;
+    await tick();
+    assert.deepEqual(legacy.checkTimes, [legacy.checkedAt, previousTime, "2026-01-01T00:00:00.000Z"]);
     for (let i = 0; i < 4; i++) await tick();
     const platforms = await getPlatforms();
     assert.equal(platforms.length, 1);
     assert.equal(platforms[0].healthUrls["http://127.0.0.1/"], "http://127.0.0.1/health");
     assert.deepEqual(platforms[0].checks["http://127.0.0.1/"], [false, false, false]);
     assert.ok(platforms[0].checkedAt);
+    assert.equal(platforms[0].checkTimes.length, 3);
+    assert.equal(platforms[0].checkTimes[0], platforms[0].checkedAt);
+    assert.ok(platforms[0].checkTimes.every((timestamp) => Number.isFinite(Date.parse(timestamp))));
     assert.deepEqual(JSON.parse(await readFile(path.join(directory, "platforms.json"), "utf8")), platforms);
   } finally {
     clearInterval(globalThis.nighthawkMonitor.timer);

@@ -51,7 +51,9 @@ export async function tick() {
       platform.checks = Object.fromEntries(platform.instances.map((instance, index) => [instance,
         [results[index], ...(platform.checks?.[instance] ?? [])].slice(0, 3),
       ]));
-      platform.checkedAt = new Date().toISOString();
+      const checkedAt = new Date().toISOString();
+      platform.checkTimes = [checkedAt, ...(platform.checkTimes ?? [platform.checkedAt ?? null])].slice(0, 3);
+      platform.checkedAt = checkedAt;
     }));
     await save();
   } finally { state.running = false; }
