@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dashboardStatus, instanceStatus, platformStatus, defaultPlatforms } from "../app/lib/status.ts";
+import { dashboardStatus, instanceStatus, platformStatus, defaultPlatforms, platformStateHistory } from "../app/lib/status.ts";
 
 function platform(a, b) {
   return { id: "test", name: "test.example.com", instances: ["a", "b"], checks: { a, b } };
@@ -48,4 +48,19 @@ test("outages outside the displayed window do not turn the dashboard amber", () 
 
 test("sample dashboard colors are derived from the same checks as details", () => {
   assert.deepEqual(defaultPlatforms.slice(0, 4).map(dashboardStatus), ["critical", "warning", "warning", "healthy"]);
+});
+
+test("platform transitions collapse repeated aggregate results across instances", () => {
+  const data = platform([true, false, false, true], [false, true, false, false]);
+  data.createdAt = "2026-09-30T00:00:00.000Z";
+  data.checkTimes = [4, 3, 2, 1].map((second) => `2026-09-30T00:00:0${second}.000Z`);
+  assert.deepEqual(platformStateHistory(data), [
+    { status: "healthy", timestamp: data.checkTimes[1] },
+    { status: "critical", timestamp: data.checkTimes[2] },
+    { status: "healthy", timestamp: data.checkTimes[3] },
+    { status: "unknown", timestamp: data.createdAt },
+  ]);
+  data.platformStateHistory = platformStateHistory(data);
+  data.checks = { a: [true, true, true], b: [false, false, false] };
+  assert.deepEqual(platformStateHistory(data), data.platformStateHistory);
 });

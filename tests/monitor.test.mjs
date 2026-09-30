@@ -48,6 +48,9 @@ test("monitor imports instances, rejects invalid input, persists checks and boun
     assert.equal(platforms.length, 1);
     assert.equal(platforms[0].healthUrls["http://127.0.0.1/"], "http://127.0.0.1/health");
     assert.deepEqual(platforms[0].checks["http://127.0.0.1/"], [false, false, false]);
+    assert.deepEqual(platforms[0].platformStateHistory.map(({ status }) => status), ["critical", "unknown"]);
+    assert.equal(platforms[0].platformStateHistory[1].timestamp, platforms[0].createdAt);
+    assert.ok(platforms[0].platformStateHistory.every(({ timestamp }) => Number.isFinite(Date.parse(timestamp))));
     assert.ok(platforms[0].checkedAt);
     assert.equal(platforms[0].checkTimes.length, 3);
     assert.equal(platforms[0].checkTimes[0], platforms[0].checkedAt);

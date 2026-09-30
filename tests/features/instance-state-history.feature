@@ -35,3 +35,18 @@ Feature: Instance boxes represent state changes
       | offline, offline, offline       | 2     | amber, gray                |
       | online, offline                 | 3     | amber, green, gray         |
       | online, offline, online         | 4     | green, amber, green, gray  |
+
+  Scenario: A newly added platform has one gray summary box
+    Then the platform boxes from newest to oldest are "gray"
+
+  Scenario Outline: Platform summary boxes represent aggregate state changes
+    When monitoring reports "<results>"
+    Then the platform boxes from newest to oldest are "<colors>"
+
+    Examples:
+      | results                        | colors                 |
+      | online                         | green, gray            |
+      | online, online, online, online | green, gray            |
+      | offline                        | red, gray              |
+      | offline, offline, offline      | red, gray              |
+      | online, offline, online        | green, red, green, gray |

@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Platform } from "../status.ts";
-import { instanceStateHistory } from "../status.ts";
+import { instanceStateHistory, platformStateHistory, platformStatus } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
 import { probe } from "./probe.ts";
 
@@ -49,6 +49,7 @@ export async function tick() {
           ]);
         } catch { return false; }
       }));
+      const previousPlatformHistory = platformStateHistory(platform);
       const checkedAt = new Date().toISOString();
       platform.stateHistory = Object.fromEntries(platform.instances.map((instance, index) => {
         const history = instanceStateHistory(platform, instance);
@@ -60,6 +61,10 @@ export async function tick() {
       ]));
       platform.checkTimes = [checkedAt, ...(platform.checkTimes ?? [platform.checkedAt ?? null])].slice(0, 3);
       platform.checkedAt = checkedAt;
+      const status = platformStatus(platform);
+      platform.platformStateHistory = previousPlatformHistory[0].status === status
+        ? previousPlatformHistory
+        : [{ status, timestamp: checkedAt }, ...previousPlatformHistory];
     }));
     await save();
   } finally { state.running = false; }
@@ -87,6 +92,7 @@ export function validatePlatform(value: unknown): Platform {
   const createdAt = new Date().toISOString();
   return {
     id: input.id, name: input.name.trim(), instances, healthUrls, createdAt,
+    platformStateHistory: [{ status: "unknown", timestamp: createdAt }],
     stateHistory: Object.fromEntries(instances.map((instance) => [instance, [{ status: "unknown", timestamp: createdAt }]])),
   };
 }
