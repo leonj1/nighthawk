@@ -46,7 +46,7 @@ export default function Dashboard() {
   const [platformName, setPlatformName] = useState("");
   const [instances, setInstances] = useState([""]);
   const [formError, setFormError] = useState("");
-  const [sort, setSort] = useState<DashboardSort>("alphabetical");
+  const [sort, setSort] = useState<DashboardSort>("status");
 
   const closeDialog = () => {
     setIsDialogOpen(false);
