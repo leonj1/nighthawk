@@ -71,6 +71,25 @@ export function dashboardStatus(platform: Platform): DashboardStatus {
     : "healthy";
 }
 
+export type DashboardSort = "alphabetical" | "status";
+
+// Known outages first; inconclusive checks stay ahead of confirmed health.
+const dashboardStatusOrder: Record<DashboardStatus, number> = {
+  critical: 0,
+  warning: 1,
+  unknown: 2,
+  healthy: 3,
+};
+
+export function sortDashboardPlatforms(platforms: readonly Platform[], sort: DashboardSort): Platform[] {
+  return [...platforms].sort((a, b) => {
+    const statusDifference = sort === "status"
+      ? dashboardStatusOrder[dashboardStatus(a)] - dashboardStatusOrder[dashboardStatus(b)]
+      : 0;
+    return statusDifference || a.name.localeCompare(b.name, "en", { sensitivity: "base" });
+  });
+}
+
 export const statusLabels: Record<DashboardStatus, string> = {
   healthy: "Successful health check",
   critical: "Offline",

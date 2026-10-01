@@ -226,6 +226,30 @@ h1 {
   padding-bottom: 3px;
 }
 
+.platform-sort {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 8px 0 15px;
+  font-size: 14px;
+}
+
+.platform-sort select {
+  background: #202024;
+  border: 1px solid #66666d;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  max-width: 100%;
+  padding: 9px 12px;
+}
+
+.platform-sort select:focus-visible {
+  outline: 3px solid #a093ff;
+  outline-offset: 3px;
+}
+
 .platform-grid {
   display: grid;
   gap: 26px 12px;

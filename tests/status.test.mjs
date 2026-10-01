@@ -1,10 +1,41 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dashboardStatus, instanceStatus, platformStatus, defaultPlatforms, platformStateHistory } from "../app/lib/status.ts";
+import { dashboardStatus, instanceStatus, platformStatus, defaultPlatforms, platformStateHistory, sortDashboardPlatforms } from "../app/lib/status.ts";
 
 function platform(a, b) {
   return { id: "test", name: "test.example.com", instances: ["a", "b"], checks: { a, b } };
 }
+
+test("dashboard sorts alphabetically regardless of status without mutating the source", () => {
+  const data = [
+    { ...platform([false], [false]), name: "Zulu.example.com" },
+    { ...platform([true], [true]), name: "alpha.example.com" },
+    { ...platform([], []), name: "Bravo.example.com" },
+  ];
+  const original = [...data];
+  assert.deepEqual(sortDashboardPlatforms(data, "alphabetical").map((item) => item.name), [
+    "alpha.example.com", "Bravo.example.com", "Zulu.example.com",
+  ]);
+  assert.deepEqual(data, original);
+});
+
+test("dashboard sorts outages, recovered outages, unchecked, then healthy with alphabetical ties", () => {
+  const data = [
+    { ...platform([true], [true]), name: "healthy" },
+    { ...platform([], []), name: "unchecked" },
+    { ...platform([true, false], [true, false]), name: "recovered" },
+    { ...platform([false], [false]), name: "z-outage" },
+    { ...platform([false], [false]), name: "a-outage" },
+  ];
+  assert.deepEqual(sortDashboardPlatforms(data, "status").map((item) => item.name), [
+    "a-outage", "z-outage", "recovered", "unchecked", "healthy",
+  ]);
+  data[3].checks = { a: [true], b: [true] };
+  assert.deepEqual(sortDashboardPlatforms(data, "status").map((item) => item.name), [
+    "a-outage", "recovered", "unchecked", "healthy", "z-outage",
+  ]);
+  assert.deepEqual(sortDashboardPlatforms([], "status"), []);
+});
 
 test("a successful instance keeps the platform green despite a failed instance", () => {
   const data = platform([true], [false]);

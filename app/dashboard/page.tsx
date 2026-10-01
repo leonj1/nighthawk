@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { dashboardStatus, statusLabels, type Platform } from "../lib/status";
+import { dashboardStatus, sortDashboardPlatforms, statusLabels, type DashboardSort, type Platform } from "../lib/status";
 
 import { usePlatforms, savePlatforms } from "../lib/use-platforms";
 import { healthUrl } from "../lib/health-url";
@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [platformName, setPlatformName] = useState("");
   const [instances, setInstances] = useState([""]);
   const [formError, setFormError] = useState("");
+  const [sort, setSort] = useState<DashboardSort>("alphabetical");
 
   const closeDialog = () => {
     setIsDialogOpen(false);
@@ -132,7 +133,7 @@ export default function Dashboard() {
     } finally { setSaving(false); }
   };
 
-  const platforms = createdPlatforms;
+  const platforms = sortDashboardPlatforms(createdPlatforms, sort);
 
   return (
     <main className="dashboard-page">
@@ -155,6 +156,17 @@ export default function Dashboard() {
               <p>Monitor your deployed sites and their instances.</p>
             </div>
             <span>{platforms.length} total</span>
+          </div>
+          <div className="platform-sort">
+            <label htmlFor="platform-sort">Sort by</label>
+            <select
+              id="platform-sort"
+              value={sort}
+              onChange={(event) => setSort(event.target.value === "status" ? "status" : "alphabetical")}
+            >
+              <option value="alphabetical">Alphabetical (A–Z)</option>
+              <option value="status">Status (worst first)</option>
+            </select>
           </div>
           <p className="status-legend">Green: successful check · Amber: all instances were offline in this window, now recovered · Red: all instances offline · Gray: unchecked</p>
           <p className="status-note">Health checks run every 10 seconds. HTTP 2xx responses are healthy.</p>
