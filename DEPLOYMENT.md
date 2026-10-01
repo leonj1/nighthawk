@@ -47,22 +47,27 @@ Versioned migrations and the one-time JSON import commit together. Unsupported
 future schema versions stop startup. Network probes run outside transactions;
 failed writes leave the last committed results available and are logged.
 
-`.deploy.yml` is a custom Deployer manifest, not Railway's native config. No
-supported volume field is documented in this repository, so provision the volume
-in Railway rather than adding an unverified manifest field:
+`.deploy.yml` declares `spec.volumes: [{name: data, mountPath: /app/data}]`
+using the [Deployer volume configuration](https://deployer-production-4a17.up.railway.app/docs/reference/manifest#persistent-container-volumes).
+It sets `NIGHTHAWK_DATA_DIR=/app/data`, so startup creates
+`/app/data/nighthawk.sqlite` (and SQLite WAL/SHM files) on that volume.
 
 1. **Before replacing the running service or mounting over `/app/data`, export
-   its existing `platforms.json` and keep a separate copy.** Mounting a new volume
-   can hide the existing ephemeral directory. Deploying first can lose it.
-2. Attach a persistent Railway volume at `/app/data`. The Docker image sets
-   `NIGHTHAWK_DATA_DIR=/app/data`; change both paths together if using another
-   mount point. Keep **one replica** and one monitoring process.
-3. Make the mounted directory writable. The image normally runs as UID 1001.
-   Railway documents root-owned volumes and `RAILWAY_RUN_UID=0` for images using
-   a non-root user. Set this service variable when required by the volume's
-   ownership, or provision directory permissions for UID 1001 before startup.
-   See [Railway volume setup and permissions](https://docs.railway.com/volumes).
-4. With the service stopped, place the exported `platforms.json` in the mounted
+   its existing database using the backup procedure below (or `platforms.json`
+   for a pre-SQLite service) and keep a separate copy.** A new volume hides the
+   ephemeral directory; attaching it does not migrate existing files.
+2. Run **Deploy through the API** to apply the manifest. A normal GitHub push
+   builds the image but does not submit the volume declaration to Deployer.
+   Deployer creates and attaches the volume and reuses it on subsequent Deploys.
+   Keep **one replica** and one monitoring process. If a manually attached,
+   unowned volume already exists, reconcile ownership with the Deployer operator;
+   do not remove a disk containing data to bypass an ownership error.
+3. The manifest sets `RAILWAY_RUN_UID=0` so Railway's root-owned volume is
+   writable despite the Docker image's default UID 1001. This runs the deployed
+   process as root. See [Railway volume permissions](https://docs.railway.com/volumes).
+   If moving the mount, change `mountPath` and `NIGHTHAWK_DATA_DIR` together.
+4. For existing SQLite data, follow the restore procedure below. For legacy JSON,
+   with the service stopped, place the exported `platforms.json` in the mounted
    directory **before the first SQLite startup**. Do not initialize an empty
    database first; the JSON import is intentionally one-time.
 5. Start the service. It creates `nighthawk.sqlite` and imports the JSON in one

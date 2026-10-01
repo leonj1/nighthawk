@@ -4,17 +4,26 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, chmodSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
+import { parse } from "yaml";
 import { setTimeout } from "node:timers/promises";
 
 const directory = mkdtempSync(path.join(process.cwd(), ".container-test-"));
-chmodSync(directory, 0o777); // A mounted directory must be writable by image UID 1001.
+chmodSync(directory, 0o700);
+const deployment = parse(readFileSync('.deploy.yml', 'utf8'));
+const { mountPath } = deployment.spec.volumes[0];
+const runtime = deployment.spec.env;
+assert.equal(deployment.spec.replicas, 1);
+assert.equal(runtime.NIGHTHAWK_DATA_DIR, mountPath);
+assert.equal(runtime.RAILWAY_RUN_UID, "0");
 const image = `nighthawk-persistence-test:${process.pid}`;
 const manifest = path.join(process.cwd(), ".cw-servers.json");
 const previousManifest = existsSync(manifest) ? readFileSync(manifest, "utf8") : null;
 let container;
 function docker(...args) { return execFileSync("docker", args, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }).trim(); }
 async function start() {
-  container = docker("run", "-d", "--mount", `type=bind,source=${directory},target=/app/data`, "-p", "0.0.0.0::8080", image);
+  container = docker("run", "-d", "--user", runtime.RAILWAY_RUN_UID,
+    ...Object.entries(runtime).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
+    "--mount", `type=bind,source=${directory},target=${mountPath}`, "-p", "0.0.0.0::8080", image);
   const port = Number(docker("port", container, "8080/tcp").split(":").at(-1));
   const servers = previousManifest ? JSON.parse(previousManifest).servers : [];
   writeFileSync(manifest, JSON.stringify({ servers: [...servers, { port, name: "SQLite container persistence acceptance test" }] }));
@@ -28,7 +37,10 @@ async function start() {
 try {
   execFileSync("docker", ["build", "-t", image, "."], { stdio: "inherit" });
   let base = await start();
-  assert.equal(docker("exec", container, "id", "-u"), "1001");
+  assert.equal(docker("exec", container, "id", "-u"), runtime.RAILWAY_RUN_UID);
+  // Startup itself must create SQLite on the mount, before any API writes.
+  assert.ok(existsSync(path.join(directory, "nighthawk.sqlite")));
+  assert.equal(readFileSync(path.join(directory, "nighthawk.sqlite")).subarray(0, 16).toString(), "SQLite format 3\0");
   const response = await fetch(`${base}/api/platforms`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify([
     { id: "container", name: "Container", instances: ["http://127.0.0.1/"], healthUrls: { "http://127.0.0.1/": "/health" } },
   ]) });
@@ -42,7 +54,7 @@ try {
     await setTimeout(200);
   }
   assert.deepEqual(before.platformStateHistory.map((s) => s.status), ["critical", "unknown"]);
-  docker("exec", container, "node", "scripts/backup.mjs", "/app/data/verified-backup.sqlite");
+  docker("exec", container, "node", "scripts/backup.mjs", `${mountPath}/verified-backup.sqlite`);
   docker("rm", "-f", container); container = undefined;
   base = await start();
   const [after] = await (await fetch(`${base}/api/platforms`)).json();

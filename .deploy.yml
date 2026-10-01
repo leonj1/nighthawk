@@ -3,10 +3,15 @@ service: nighthawk
 type: container
 target: railway
 
-# Provision the Railway volume at /app/data separately; see DEPLOYMENT.md.
-# This custom Deployer manifest has no verified volume provisioning field.
 spec:
   replicas: 1
+  volumes:
+    - name: data
+      mountPath: /app/data
+  env:
+    NIGHTHAWK_DATA_DIR: /app/data
+    # Railway volumes are root-owned, overriding the image's default UID 1001.
+    RAILWAY_RUN_UID: "0"
   containerPort: 8080
   artifact:
     dockerfilePath: Dockerfile

@@ -11,7 +11,9 @@ Platforms, instances, the latest three aligned check cycles, and all state
 transitions persist in SQLite. The database is
 `$NIGHTHAWK_DATA_DIR/nighthawk.sqlite`, defaulting to `data/nighthawk.sqlite`
 (`/app/data/nighthawk.sqlite` in Docker). A persistent volume is required to keep
-this file across deployments. Use Node 24 (the Docker runtime); local Node
+this file across deployments. `.deploy.yml` declares that volume and points
+`NIGHTHAWK_DATA_DIR` at it; apply it using **Deploy through the API** as described
+in [DEPLOYMENT.md](DEPLOYMENT.md). Use Node 24 (the Docker runtime); local Node
 22.13+ also supports the built-in SQLite driver, with an experimental warning.
 
 On first startup, existing `platforms.json` data in the same directory is imported
