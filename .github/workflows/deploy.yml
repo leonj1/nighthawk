@@ -1,6 +1,9 @@
 name: Deploy through the API
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -25,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SERVICE_TYPE: railway
-      ENVIRONMENT: ${{ inputs.environment }}
+      ENVIRONMENT: ${{ inputs.environment || 'production' }}
       VERSION: ${{ inputs.version }}
       DEPLOYER_URL: ${{ vars.DEPLOYER_URL }}
       TOKEN_EXCHANGE_URL: ${{ vars.TOKEN_EXCHANGE_URL }}
