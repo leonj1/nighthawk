@@ -58,7 +58,14 @@ export class Monitor {
 }
 
 const globalMonitor = globalThis as typeof globalThis & { nighthawkMonitor?: Monitor };
-function monitor() { return globalMonitor.nighthawkMonitor ??= new Monitor(new PlatformStore()); }
+function monitor() {
+  if (!globalMonitor.nighthawkMonitor) {
+    const store = new PlatformStore();
+    console.info(`Nighthawk SQLite: ${store.filename}; Railway volume: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || "not reported (local runtime)"}`);
+    globalMonitor.nighthawkMonitor = new Monitor(store);
+  }
+  return globalMonitor.nighthawkMonitor;
+}
 export async function startMonitor() { monitor().start(); }
 export async function tick() { await monitor().tick(); }
 export async function getPlatforms() { await startMonitor(); return monitor().store.list(); }

@@ -85,6 +85,31 @@ working database to rerun import. Preserve the JSON backup until verified.
 
 ## Backup and restore
 
+### Diagnosing data missing after a deployment
+
+The volume declaration in this repository is not proof that a volume is attached
+to the live service. **Deploy through the API** is a manually triggered workflow;
+Railway's repository autodeploy only rebuilds the application. Check the exact
+service and environment in Railway for an attached volume at `/app/data`, and
+check its runtime variables: `NIGHTHAWK_DATA_DIR=/app/data` and Railway's automatic
+`RAILWAY_VOLUME_MOUNT_PATH=/app/data`. Do not manually set the latter to simulate
+an attachment. See [Railway's volume variables](https://docs.railway.com/volumes#provided-variables).
+
+Startup now refuses a Railway runtime with no reported volume or with a data
+directory outside that volume, before opening SQLite. The server and backup
+command share this check and use the mount path when `NIGHTHAWK_DATA_DIR` is
+unset. Startup logs the resolved SQLite filename and reported volume path.
+This checks Railway's runtime configuration, not disk identity: replacing a
+volume with an empty one, or manually overriding its metadata, cannot be detected.
+
+Before changing mounts or redeploying, export any surviving data from the running
+container. Check existing volumes and backups for the original database; an
+empty new volume does not recover a discarded container's files. Apply the
+manifest with **Deploy through the API** after preserving any surviving data,
+then verify saved platforms survive a subsequent container replacement.
+
+### Creating and restoring a snapshot
+
 From a checkout use `npm run backup -- /path/to/new-backup.sqlite`; in the deployed
 container use `node scripts/backup.mjs /app/data/new-backup.sqlite`. Choose a new
 filename each time. The command uses SQLite `VACUUM INTO` to take a consistent

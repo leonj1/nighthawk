@@ -22,6 +22,7 @@ let container;
 function docker(...args) { return execFileSync("docker", args, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }).trim(); }
 async function start() {
   container = docker("run", "-d", "--user", runtime.RAILWAY_RUN_UID,
+    "-e", "RAILWAY_SERVICE_ID=container-test", "-e", `RAILWAY_VOLUME_MOUNT_PATH=${mountPath}`,
     ...Object.entries(runtime).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
     "--mount", `type=bind,source=${directory},target=${mountPath}`, "-p", "0.0.0.0::8080", image);
   const port = Number(docker("port", container, "8080/tcp").split(":").at(-1));
