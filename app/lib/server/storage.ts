@@ -5,10 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import type { Platform, InstanceState, PlatformState } from "../status.ts";
 import { instanceStateHistory, platformStateHistory, platformStatus } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
-
-export function dataDirectory() {
-  return process.env.NIGHTHAWK_DATA_DIR || path.join(process.cwd(), "data");
-}
+import { dataDirectory } from "../../../scripts/data-directory.mjs";
+export { dataDirectory } from "../../../scripts/data-directory.mjs";
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
