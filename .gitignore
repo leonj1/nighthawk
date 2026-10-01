@@ -18,3 +18,8 @@ next-env.d.ts
 
 # Persistent monitoring data
 /data
+
+# Temporary database tests and verification logs
+/.*-test-*
+/.bdd-sqlite-*
+/.*-results.log

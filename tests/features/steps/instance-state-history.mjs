@@ -21,11 +21,12 @@ const { code: compiled } = await transform(source, {
 
 // Render the real view and real status functions, replacing only data fetching
 // and Next navigation. No network, running Next server, or real timers required.
-function boxes(platform, scope = "instance") {
+export function renderView(platform, now) {
   const exports = {};
   runInNewContext(compiled, {
     exports,
     require(name) {
+      if (name === "react" && now !== undefined) return { ...React, useState: () => [now, () => {}] };
       if (name === "../lib/use-platforms") return { usePlatforms: () => ({ platforms: [platform] }) };
       if (name === "../lib/status") return status;
       if (name === "../lib/check-time") return checkTime;
@@ -33,7 +34,11 @@ function boxes(platform, scope = "instance") {
       return require(name);
     },
   });
-  const html = renderToStaticMarkup(React.createElement(exports.default, { platformId: platform.id }));
+  return renderToStaticMarkup(React.createElement(exports.default, { platformId: platform.id }));
+}
+
+export function boxes(platform, scope = "instance") {
+  const html = renderView(platform);
   const article = scope === "platform"
     ? html.match(/<section\b[^>]*class="platform-summary"[^>]*>([\s\S]*?)<\/section>/)?.[1]
     : html.match(/<article\b[^>]*class="instance-column"[^>]*>([\s\S]*?)<\/article>/)?.[1];

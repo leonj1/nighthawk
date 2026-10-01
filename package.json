@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:bdd": "node --experimental-strip-types node_modules/@cucumber/cucumber/bin/cucumber.js tests/features/*.feature --import tests/features/steps/*.mjs"
+    "test:bdd": "node --experimental-strip-types node_modules/@cucumber/cucumber/bin/cucumber.js \"tests/features/*.feature\" --import \"tests/features/steps/*.mjs\"",
+    "backup": "node scripts/backup.mjs",
+    "test:container": "node tests/container-persistence.mjs"
   },
   "dependencies": {
     "next": "^16.3.6",
@@ -21,5 +23,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

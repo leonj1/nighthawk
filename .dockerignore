@@ -6,3 +6,9 @@
 node_modules
 npm-debug.log*
 README.md
+
+.npm-cache
+data
+.*-test-*
+.bdd-sqlite-*
+*.log

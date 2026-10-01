@@ -3,6 +3,8 @@ service: nighthawk
 type: container
 target: railway
 
+# Provision the Railway volume at /app/data separately; see DEPLOYMENT.md.
+# This custom Deployer manifest has no verified volume provisioning field.
 spec:
   replicas: 1
   containerPort: 8080

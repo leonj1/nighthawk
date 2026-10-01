@@ -1,80 +1,71 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
 import type { Platform } from "../status.ts";
-import { instanceStateHistory, platformStateHistory, platformStatus } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
 import { probe } from "./probe.ts";
+import { PlatformStore } from "./storage.ts";
 
 const interval = 10_000;
-const file = path.join(process.env.NIGHTHAWK_DATA_DIR || path.join(process.cwd(), "data"), "platforms.json");
-type State = { platforms: Platform[]; ready?: Promise<void>; timer?: ReturnType<typeof setInterval>; running: boolean; writes: Promise<void> };
-const globalMonitor = globalThis as typeof globalThis & { nighthawkMonitor?: State };
-const state = globalMonitor.nighthawkMonitor ??= { platforms: [], running: false, writes: Promise.resolve() };
 
-function save() {
-  const contents = JSON.stringify(state.platforms);
-  const write = state.writes.catch(() => {}).then(async () => {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(`${file}.tmp`, contents);
-    await rename(`${file}.tmp`, file);
-  });
-  state.writes = write;
-  return write;
-}
+export class Monitor {
+  private running = false;
+  private timer?: ReturnType<typeof setInterval>;
+  readonly store: PlatformStore;
+  private check: typeof probe;
+  private now: () => string;
+  private timeout: number;
 
-export async function startMonitor() {
-  state.ready ??= (async () => {
-    try { state.platforms = JSON.parse(await readFile(file, "utf8")); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  })();
-  await state.ready;
-  if (!state.timer) {
-    state.timer = setInterval(() => { void tick().catch(console.error); }, interval);
-    state.timer.unref();
-    void tick().catch(console.error);
+  constructor(store: PlatformStore, check: typeof probe = probe,
+    now: () => string = () => new Date().toISOString(), timeout = 8_000) {
+    this.store = store;
+    this.check = check;
+    this.now = now;
+    this.timeout = timeout;
+  }
+
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => { void this.tick().catch(console.error); }, interval);
+    this.timer.unref();
+    void this.tick().catch(console.error);
+  }
+
+  stop() { clearInterval(this.timer); this.timer = undefined; }
+
+  async tick() {
+    if (this.running) return;
+    this.running = true;
+    try {
+      // Wait for every platform even if one database write fails, so a new tick
+      // cannot overlap requests still in flight from this cycle.
+      const completed = await Promise.allSettled(this.store.list().map(async (platform) => {
+        const revision = this.store.revision(platform.id);
+        const results = await Promise.all(platform.instances.map(async (instance) => {
+          const controller = new AbortController();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            return await Promise.race([
+              this.check(healthUrl(instance, platform.healthUrls?.[instance]), controller.signal),
+              new Promise<boolean>((resolve) => { timer = setTimeout(() => { controller.abort(); resolve(false); }, this.timeout); }),
+            ]);
+          } catch { return false; }
+          finally { clearTimeout(timer); }
+        }));
+        this.store.recordCycle(platform.id, Object.fromEntries(platform.instances.map((url, i) => [url, results[i]])), this.now(), revision);
+      }));
+      const failures = completed.filter((result) => result.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Unable to persist monitoring cycle.");
+    } finally { this.running = false; }
   }
 }
 
-export async function tick() {
-  if (state.running) return;
-  state.running = true;
-  try {
-    await Promise.all(state.platforms.map(async (platform) => {
-      const results = await Promise.all(platform.instances.map(async (instance) => {
-        try {
-          const signal = AbortSignal.timeout(8_000);
-          return await Promise.race([
-            probe(healthUrl(instance, platform.healthUrls?.[instance]), signal),
-            new Promise<boolean>((resolve) => signal.addEventListener("abort", () => resolve(false), { once: true })),
-          ]);
-        } catch { return false; }
-      }));
-      const previousPlatformHistory = platformStateHistory(platform);
-      const checkedAt = new Date().toISOString();
-      platform.stateHistory = Object.fromEntries(platform.instances.map((instance, index) => {
-        const history = instanceStateHistory(platform, instance);
-        const status = results[index] ? "healthy" as const : "warning" as const;
-        return [instance, history[0].status === status ? history : [{ status, timestamp: checkedAt }, ...history]];
-      }));
-      platform.checks = Object.fromEntries(platform.instances.map((instance, index) => [instance,
-        [results[index], ...(platform.checks?.[instance] ?? [])].slice(0, 3),
-      ]));
-      platform.checkTimes = [checkedAt, ...(platform.checkTimes ?? [platform.checkedAt ?? null])].slice(0, 3);
-      platform.checkedAt = checkedAt;
-      const status = platformStatus(platform);
-      platform.platformStateHistory = previousPlatformHistory[0].status === status
-        ? previousPlatformHistory
-        : [{ status, timestamp: checkedAt }, ...previousPlatformHistory];
-    }));
-    await save();
-  } finally { state.running = false; }
-}
-
-export async function getPlatforms() { await startMonitor(); return state.platforms; }
+const globalMonitor = globalThis as typeof globalThis & { nighthawkMonitor?: Monitor };
+function monitor() { return globalMonitor.nighthawkMonitor ??= new Monitor(new PlatformStore()); }
+export async function startMonitor() { monitor().start(); }
+export async function tick() { await monitor().tick(); }
+export async function getPlatforms() { await startMonitor(); return monitor().store.list(); }
 
 export function validatePlatform(value: unknown): Platform {
   const input = value as Platform;
-  if (!input || typeof input.id !== "string" || input.id.length > 100 ||
+  if (!input || typeof input.id !== "string" || !input.id || input.id.length > 100 ||
       typeof input.name !== "string" || !input.name.trim() || input.name.length > 253 ||
       !Array.isArray(input.instances) || !input.instances.length || input.instances.length > 50) {
     throw new Error("Provide a platform name and 1–50 instances.");
@@ -100,12 +91,6 @@ export function validatePlatform(value: unknown): Platform {
 export async function addPlatforms(inputs: unknown[]) {
   const additions = inputs.map(validatePlatform);
   await startMonitor();
-  for (const platform of additions) {
-    if (!state.platforms.some((existing) => existing.id === platform.id || existing.name === platform.name)) {
-      if (state.platforms.length >= 100) throw new Error("The limit is 100 platforms.");
-      state.platforms.unshift(platform);
-    }
-  }
-  await save();
-  return state.platforms;
+  monitor().store.add(additions);
+  return monitor().store.list();
 }

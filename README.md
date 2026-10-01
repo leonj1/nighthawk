@@ -1,25 +1,24 @@
 # Nighthawk
 
-Nighthawk is a monitoring platform for highly available services deployed
-across multiple regions. A successful instance health check is green; a failed
-check is red. A platform is red only when every instance is offline at the same
-check time, and remains available if at least one instance has a successful check.
+Nighthawk checks configured HTTP(S) health endpoints every 10 seconds while the
+Node server is running. Instances begin with one gray box, then gain a green
+(success) or amber (failure) box only when their state changes. Platform detail
+history uses gray, green, and red for unknown, available, and fully offline.
+The dashboard uses amber when a currently available platform had a total outage
+within the latest three check cycles.
 
-Only the dashboard uses amber: the platform is currently available, but every
-instance was offline together during the displayed monitoring window. Current
-total outages take precedence and remain red. Detail history uses green or red
-for each check time, with gray for missing or inconclusive checks.
+Platforms, instances, the latest three aligned check cycles, and all state
+transitions persist in SQLite. The database is
+`$NIGHTHAWK_DATA_DIR/nighthawk.sqlite`, defaulting to `data/nighthawk.sqlite`
+(`/app/data/nighthawk.sqlite` in Docker). A persistent volume is required to keep
+this file across deployments. Use Node 24 (the Docker runtime); local Node
+22.13+ also supports the built-in SQLite driver, with an experimental warning.
 
-The current UI uses sample checks for Platform 1–15 and browser-local storage
-for created platforms. There is no remote health-check collector yet. New and
-previously saved platforms without check results appear gray. Check histories
-are stored in `checks`, keyed by instance URL, with newest-first boolean results
-(`true` for success, `false` for failure, `null` for unknown). Array positions
-must refer to the same check time across instances; the displayed window is
-the latest three positions (now, 30 minutes ago, and one hour ago).
-
-This repository contains the Next.js application, including its status
-dashboard and JSON health endpoints.
+On first startup, existing `platforms.json` data in the same directory is imported
+atomically and left untouched as a backup. Invalid legacy data stops startup
+without a partial import. Correct it and restart to retry. Later startups do
+not re-import JSON. Missing legacy timestamps remain unknown; discarded history
+cannot be recovered. Browser-local imports remain supported and idempotent.
 
 ## Development
 
@@ -40,6 +39,7 @@ and [http://localhost:3000/healthz](http://localhost:3000/healthz). Both return:
 
 ```bash
 npm test
+npm run test:bdd
 npm run typecheck
 npm run build
 ```
@@ -55,12 +55,17 @@ green for online, amber for offline, and one additional box per state change.
 Repeated identical results must not add boxes. The initial unknown state is
 retained in the expected history, ordered newest first.
 
-These executable acceptance tests cover the implemented instance transition
-history. Run the BDD suite separately from `npm test` to verify this behavior.
-It renders the actual instance component with supplied check observations and
-asserts its status classes and box counts; it does not test the background
-scheduler, persistence, browser polling, or computed CSS colors. The rendering
-harness uses Next's bundled SWC compiler and may need updating with Next upgrades.
+The original Gherkin scenarios render the real instance view. The durable
+monitoring scenarios run controlled checks, reopen a file-backed database, and
+render its persisted histories. Integration tests cover migrations, transaction
+rollback, foreign keys, stale/overlapping cycles, timeouts, duplicate imports,
+API responses, ordering, retention, process restarts, and backup restoration.
+Tests use temporary directories inside this workspace and controlled responses.
+
+With Docker available, run `npm run test:container` to build the Node 24 image,
+check the mounted directory is writable by the container user, save data through
+the API, and replace the container while reusing that directory. It also tests
+the production backup command and cleans up its containers and test data.
 
 ## Deployment
 

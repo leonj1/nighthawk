@@ -1,4 +1,4 @@
-import { addPlatforms, getPlatforms } from "../../lib/server/monitor";
+import { addPlatforms, getPlatforms } from "../../lib/server/monitor.ts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
