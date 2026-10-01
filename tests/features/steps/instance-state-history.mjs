@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { loadBindings, transform } from "next/dist/build/swc/index.js";
 import * as status from "../../../app/lib/status.ts";
 import * as checkTime from "../../../app/lib/check-time.ts";
+import * as uptime from "../../../app/lib/uptime.ts";
 
 const require = createRequire(import.meta.url);
 const instance = "https://example.com/";
@@ -30,6 +31,7 @@ export function renderView(platform, now) {
       if (name === "../lib/use-platforms") return { usePlatforms: () => ({ platforms: [platform] }) };
       if (name === "../lib/status") return status;
       if (name === "../lib/check-time") return checkTime;
+      if (name === "../lib/uptime") return uptime;
       if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
       return require(name);
     },

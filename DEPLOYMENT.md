@@ -40,8 +40,10 @@ original timestamps; the dashboard uses the latest three aligned check cycles.
 
 ## SQLite persistence and first deployment
 
-The app uses Node's built-in `node:sqlite` driver. Schema version 1 has platforms,
-instances, check runs/results, and separate instance/platform transition tables.
+The app uses Node's built-in `node:sqlite` driver. Schema version 2 adds hourly
+instance and platform uptime counts to the platforms, check runs/results, and
+state transition tables. Version 1 databases upgrade on open, backfilling only
+the three retained raw check runs. The backup command needs no change.
 Foreign keys, WAL, full synchronous writes, and transactions protect commits.
 Versioned migrations and the one-time JSON import commit together. Unsupported
 future schema versions stop startup. Network probes run outside transactions;

@@ -45,6 +45,9 @@ test("monitor imports instances, rejects invalid input, persists checks and boun
     assert.equal(platforms[0].checkTimes.length, 3);
     assert.equal(platforms[0].checkTimes[0], platforms[0].checkedAt);
     assert.ok(platforms[0].checkTimes.every((timestamp) => Number.isFinite(Date.parse(timestamp))));
+    assert.deepEqual({ good: platforms[0].uptime["http://127.0.0.1/"].good, samples: platforms[0].uptime["http://127.0.0.1/"].samples }, { good: 0, samples: 4 });
+    assert.equal(platforms[0].uptime["http://127.0.0.1/"].lastSampleAt, platforms[0].checkedAt);
+    assert.equal(platforms[0].platformUptime.samples, 4);
     const { PlatformStore } = await import("../app/lib/server/storage.ts");
     const reopened = new PlatformStore(directory);
     assert.deepEqual(reopened.list(), platforms);

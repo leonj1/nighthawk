@@ -1023,3 +1023,7 @@ h1 {
     display: none;
   }
 }
+
+.platform-uptime, .instance-uptime { font-size: 0.875rem; }
+.platform-uptime--below { color: #b42318; }
+.platform-uptime--none { color: #667085; }

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import type { Platform, InstanceState, PlatformState } from "../status.ts";
+import type { Platform, InstanceState, PlatformState, UptimeSample } from "../status.ts";
 import { instanceStateHistory, platformStateHistory, platformStatus } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
 import { dataDirectory } from "../../../scripts/data-directory.mjs";
@@ -43,7 +43,24 @@ CREATE TABLE platform_state_changes (
 CREATE INDEX runs_platform ON check_runs(platform_id, id);
 CREATE INDEX instance_history ON instance_state_changes(instance_id, id);
 CREATE INDEX platform_history ON platform_state_changes(platform_id, id);
+CREATE TABLE instance_check_buckets (
+  instance_id TEXT NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+  bucket TEXT NOT NULL, good INTEGER NOT NULL, total INTEGER NOT NULL,
+  first_checked_at TEXT NOT NULL, last_checked_at TEXT NOT NULL,
+  PRIMARY KEY(instance_id, bucket)
+) STRICT;
+CREATE TABLE platform_check_buckets (
+  platform_id TEXT NOT NULL REFERENCES platforms(id) ON DELETE CASCADE,
+  bucket TEXT NOT NULL, good INTEGER NOT NULL, total INTEGER NOT NULL,
+  first_checked_at TEXT NOT NULL, last_checked_at TEXT NOT NULL,
+  PRIMARY KEY(platform_id, bucket)
+) STRICT;
+CREATE INDEX instance_buckets_recent ON instance_check_buckets(instance_id, last_checked_at);
+CREATE INDEX platform_buckets_recent ON platform_check_buckets(platform_id, last_checked_at);
 `;
+
+const bucketSchema = schema.slice(schema.indexOf("CREATE TABLE instance_check_buckets"));
+const windowMs = 30 * 86_400_000;
 
 function validTimestamp(value: unknown) {
   return value === null || (typeof value === "string" && Number.isFinite(Date.parse(value)));
@@ -101,8 +118,18 @@ export class PlatformStore {
       this.db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 1000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;");
       this.transaction(() => {
         const version = Number(this.db.prepare("PRAGMA user_version").get()!.user_version);
-        if (version > 1) throw new Error(`Unsupported SQLite schema version ${version}.`);
-        if (version === 0) { this.db.exec(schema); this.db.exec("PRAGMA user_version = 1"); }
+        if (version > 2) throw new Error(`Unsupported SQLite schema version ${version}.`);
+        if (version === 0) this.db.exec(schema);
+        if (version === 1) {
+          this.db.exec(bucketSchema);
+          const runs = this.db.prepare("SELECT id, platform_id, checked_at FROM check_runs WHERE checked_at IS NOT NULL ORDER BY id").all();
+          for (const run of runs) {
+            const results = this.db.prepare("SELECT instance_id AS id, healthy FROM check_results WHERE run_id = ?").all(run.id)
+              .map((r) => ({ id: String(r.id), result: r.healthy === null ? null : r.healthy === 1 }));
+            this.tally(String(run.platform_id), results, String(run.checked_at));
+          }
+        }
+        if (version < 2) this.db.exec("PRAGMA user_version = 2");
         if (!this.db.prepare("SELECT 1 FROM metadata WHERE key = 'json_import'").get()) {
           let legacy: unknown = [];
           try { legacy = JSON.parse(readFileSync(path.join(directory, "platforms.json"), "utf8")); }
@@ -123,6 +150,34 @@ export class PlatformStore {
 
   close() { this.db.close(); }
 
+  private tally(platformId: string, results: { id: string; result: boolean | null }[], checkedAt: string | null) {
+    if (checkedAt === null) return;
+    const normalized = new Date(checkedAt).toISOString();
+    const bucket = new Date(Math.floor(Date.parse(normalized) / 3_600_000) * 3_600_000).toISOString();
+    const upsert = (table: "instance_check_buckets" | "platform_check_buckets", key: string, id: string, good: number) => {
+      this.db.prepare(`INSERT INTO ${table} VALUES (?, ?, ?, 1, ?, ?)
+        ON CONFLICT(${key}, bucket) DO UPDATE SET good = good + excluded.good,
+        total = total + 1, first_checked_at = MIN(first_checked_at, excluded.first_checked_at),
+        last_checked_at = MAX(last_checked_at, excluded.last_checked_at)`).run(id, bucket, good, normalized, normalized);
+    };
+    const known = results.filter((r) => r.result !== null);
+    for (const r of known) upsert("instance_check_buckets", "instance_id", r.id, Number(r.result));
+    if (known.length) upsert("platform_check_buckets", "platform_id", platformId, Number(known.some((r) => r.result)));
+    const cutoff = new Date(Date.parse(normalized) - windowMs).toISOString();
+    this.db.prepare("DELETE FROM instance_check_buckets WHERE instance_id IN (SELECT id FROM instances WHERE platform_id = ?) AND last_checked_at < ?").run(platformId, cutoff);
+    this.db.prepare("DELETE FROM platform_check_buckets WHERE platform_id = ? AND last_checked_at < ?").run(platformId, cutoff);
+  }
+
+  private sample(table: "instance_check_buckets" | "platform_check_buckets", key: string, id: string, cutoff: string): UptimeSample | undefined {
+    const row = this.db.prepare(`SELECT SUM(good) AS good, SUM(total) AS samples,
+      MIN(first_checked_at) AS firstSampleAt, MAX(last_checked_at) AS lastSampleAt
+      FROM ${table} WHERE ${key} = ? AND last_checked_at >= ?`).get(id, cutoff);
+    return row?.samples === null ? undefined : {
+      good: Number(row!.good), samples: Number(row!.samples),
+      firstSampleAt: String(row!.firstSampleAt), lastSampleAt: String(row!.lastSampleAt),
+    };
+  }
+
   private insert(p: Platform, position: number) {
     this.db.prepare("INSERT INTO platforms(id, name, created_at, position) VALUES (?, ?, ?, ?)").run(p.id, p.name, p.createdAt ?? null, position);
     const instanceIds = new Map<string, string>();
@@ -138,15 +193,21 @@ export class PlatformStore {
     }
     const count = Math.min(3, Math.max(p.checkTimes?.length ?? 0, p.checkedAt ? 1 : 0, ...p.instances.map((url) => p.checks?.[url]?.length ?? 0)));
     for (let index = count - 1; index >= 0; index--) {
-      const run = this.db.prepare("INSERT INTO check_runs(platform_id, checked_at) VALUES (?, ?)").run(p.id, p.checkTimes?.[index] ?? (index === 0 ? p.checkedAt ?? null : null)).lastInsertRowid;
+      const checkedAt = p.checkTimes?.[index] ?? (index === 0 ? p.checkedAt ?? null : null);
+      const run = this.db.prepare("INSERT INTO check_runs(platform_id, checked_at) VALUES (?, ?)").run(p.id, checkedAt).lastInsertRowid;
+      const results: { id: string; result: boolean | null }[] = [];
       for (const [url, id] of instanceIds) {
         const result = p.checks?.[url]?.[index];
         this.db.prepare("INSERT INTO check_results VALUES (?, ?, ?, ?)").run(p.id, run, id, result == null ? null : Number(result));
+        results.push({ id, result: result ?? null });
       }
+      this.tally(p.id, results, checkedAt);
     }
   }
 
-  list(): Platform[] {
+  list(now = new Date().toISOString()): Platform[] {
+    if (!Number.isFinite(Date.parse(now))) throw new Error("Invalid list timestamp.");
+    const cutoff = new Date(Date.parse(now) - windowMs).toISOString();
     return this.transaction(() => this.db.prepare("SELECT * FROM platforms ORDER BY position DESC").all().map((row) => {
       const id = String(row.id);
       const instances = this.db.prepare("SELECT * FROM instances WHERE platform_id = ? ORDER BY position").all(id);
@@ -167,6 +228,13 @@ export class PlatformStore {
           return result === null ? null : result === 1;
         })]));
       }
+      const uptime = Object.fromEntries(instances.flatMap((i) => {
+        const sample = this.sample("instance_check_buckets", "instance_id", String(i.id), cutoff);
+        return sample ? [[String(i.url), sample]] : [];
+      }));
+      if (Object.keys(uptime).length) p.uptime = uptime;
+      const platformUptime = this.sample("platform_check_buckets", "platform_id", id, cutoff);
+      if (platformUptime) p.platformUptime = platformUptime;
       return p;
     }), false);
   }
@@ -190,7 +258,7 @@ export class PlatformStore {
 
   // The expected revision makes retries and stale/overlapping cycles harmless.
   // Network requests must complete before entering this transaction.
-  recordCycle(platformId: string, results: Record<string, boolean | null>, checkedAt: string, expectedRevision: number): boolean {
+  recordCycle(platformId: string, results: Record<string, boolean | null>, checkedAt: string | null, expectedRevision: number): boolean {
     if (!validTimestamp(checkedAt)) throw new Error("Invalid check timestamp.");
     return this.transaction(() => {
       if (this.revision(platformId) !== expectedRevision) return false;
@@ -204,6 +272,7 @@ export class PlatformStore {
         const previous = this.db.prepare("SELECT status FROM instance_state_changes WHERE instance_id = ? ORDER BY id DESC LIMIT 1").get(i.id);
         if (previous?.status !== status) this.db.prepare("INSERT INTO instance_state_changes(instance_id, status, timestamp) VALUES (?, ?, ?)").run(i.id, status, checkedAt);
       }
+      this.tally(platformId, instances.map((i) => ({ id: String(i.id), result: results[String(i.url)] })), checkedAt);
       const p: Platform = { id: platformId, name: "", instances: instances.map((i) => String(i.url)), checks: Object.fromEntries(Object.entries(results).map(([url, value]) => [url, [value]])) };
       const status = platformStatus(p);
       const previous = this.db.prepare("SELECT status FROM platform_state_changes WHERE platform_id = ? ORDER BY id DESC LIMIT 1").get(platformId);

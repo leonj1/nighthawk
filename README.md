@@ -7,8 +7,14 @@ history uses gray, green, and red for unknown, available, and fully offline.
 The dashboard uses amber when a currently available platform had a total outage
 within the latest three check cycles.
 
-Platforms, instances, the latest three aligned check cycles, and all state
-transitions persist in SQLite. The database is
+Platforms, instances, the latest three aligned check cycles, state transitions,
+and hourly uptime counts persist in SQLite. Uptime is healthy checks divided by
+known checks over a rolling 30 days, with a 99.5% target. New instances are
+measured only from their first check; the coverage label shows how much of the
+window has data. Unknown results and missed monitoring runs are excluded. Hourly
+counts older than 30 days are pruned during check cycles. A bucket crossing the
+window edge is included whole, so the figure can include up to one extra hour.
+The database is
 `$NIGHTHAWK_DATA_DIR/nighthawk.sqlite`, defaulting to `data/nighthawk.sqlite`
 (`/app/data/nighthawk.sqlite` in Docker). A persistent volume is required to keep
 this file across deployments. `.deploy.yml` declares that volume and points
@@ -45,6 +51,9 @@ npm run test:bdd
 npm run typecheck
 npm run build
 ```
+
+`tests/uptime.test.mjs` covers the percentage and coverage rules;
+`tests/features/uptime-window.feature` covers the rendered uptime views.
 
 Run the Gherkin acceptance specification for instance state changes with:
 

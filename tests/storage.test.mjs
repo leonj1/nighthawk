@@ -156,7 +156,7 @@ test("current JSON migration preserves every retained value, is one-time, and le
   cycle(store, { [url]: false }, 30); const expected = store.list();
   writeFileSync(path.join(f.directory, "platforms.json"), "invalid after migration");
   store = f.reopen(); assert.deepEqual(store.list(), expected);
-  assert.equal(f.raw().prepare("PRAGMA user_version").get().user_version, 1);
+  assert.equal(f.raw().prepare("PRAGMA user_version").get().user_version, 2);
 });
 
 test("older JSON reconstructs history, defaults endpoints and preserves missing timestamps and URL keys", (t) => {
@@ -194,7 +194,7 @@ test("interrupted import rolls back; existing schema upgrades reopen and future 
   const expected = store.list(); const db = f.raw();
   db.exec("BEGIN IMMEDIATE; DELETE FROM metadata; DELETE FROM platforms; ROLLBACK");
   assert.deepEqual(f.reopen().list(), expected);
-  db.exec("PRAGMA user_version = 2");
+  db.exec("PRAGMA user_version = 3");
   assert.throws(() => new PlatformStore(f.directory), /Unsupported SQLite schema/);
   assert.deepEqual(f.raw().prepare("SELECT name FROM platforms").all().map((p) => p.name), ["p"]);
 });
@@ -292,4 +292,125 @@ test("the scheduler runs immediately, repeats every ten seconds and stops", asyn
   monitor.start(); t.mock.timers.tick(9_999); await settle(); assert.equal(checks, 1);
   t.mock.timers.tick(1); await settle(); assert.equal(checks, 2);
   monitor.stop(); t.mock.timers.tick(10_000); await settle(); assert.equal(checks, 2);
+});
+
+const dayAt = (days, seconds = 0) => new Date(Date.UTC(2026, 0, 1 + days, 0, 0, seconds)).toISOString();
+const cycleAt = (store, results, at, id = "p") => store.recordCycle(id, results, at, store.revision(id));
+const bucketRows = (db, table = "instance_check_buckets") => db.prepare(`SELECT * FROM ${table} ORDER BY bucket`).all();
+
+test("uptime survives three-run retention, excludes unknown, and persists", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  assert.equal(store.list(dayAt(0))[0].uptime, undefined);
+  [true, true, false, true, true, true, null, true, false, true].forEach((r, i) => cycle(store, { [url]: r }, i * 10));
+  const p = store.list(dayAt(1))[0]; const db = f.raw();
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM check_runs").get().n, 3);
+  assert.deepEqual(p.uptime[url], { good: 7, samples: 9, firstSampleAt: time(0), lastSampleAt: time(90) });
+  assert.deepEqual(p.platformUptime, p.uptime[url]);
+  assert.equal(bucketRows(db).length, 1);
+  assert.deepEqual(f.reopen().list(dayAt(1)), [p]);
+});
+
+test("new instances use only their actual checks, with no padding", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform("old")]);
+  for (let d = 0; d < 20; d++) cycleAt(store, { [url]: d !== 10 }, dayAt(d), "old");
+  store.add([platform("new")]);
+  for (let d = 17; d < 20; d++) cycleAt(store, { [url]: d !== 18 }, dayAt(d), "new");
+  assert.deepEqual(store.list(dayAt(20)).find((p) => p.id === "old").uptime[url], { good: 19, samples: 20, firstSampleAt: dayAt(0), lastSampleAt: dayAt(19) });
+  assert.deepEqual(store.list(dayAt(20)).find((p) => p.id === "new").uptime[url], { good: 2, samples: 3, firstSampleAt: dayAt(17), lastSampleAt: dayAt(19) });
+  assert.equal(f.raw().prepare("SELECT COUNT(*) AS n FROM instance_check_buckets WHERE total = 0").get().n, 0);
+});
+
+test("rolling reads exclude old buckets and writes prune them", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  cycleAt(store, { [url]: false }, dayAt(0));
+  cycleAt(store, { [url]: true }, dayAt(29, 86399));
+  assert.equal(store.list(dayAt(30))[0].uptime[url].samples, 2);
+  assert.deepEqual(store.list(dayAt(31))[0].uptime[url], { good: 1, samples: 1, firstSampleAt: dayAt(29, 86399), lastSampleAt: dayAt(29, 86399) });
+  const db = f.raw(); assert.equal(bucketRows(db).length, 2);
+  cycleAt(store, { [url]: true }, dayAt(31));
+  assert.equal(bucketRows(db).length, 2);
+  assert.equal(bucketRows(db, "platform_check_buckets").length, 2);
+});
+
+test("a straddling hour is included whole until its last check exits the window", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  cycleAt(store, { [url]: false }, dayAt(0)); cycleAt(store, { [url]: true }, dayAt(0, 3000));
+  assert.deepEqual(store.list(dayAt(30, 1500))[0].uptime[url], { good: 1, samples: 2, firstSampleAt: dayAt(0), lastSampleAt: dayAt(0, 3000) });
+  assert.equal(store.list(dayAt(30, 3001))[0].uptime, undefined);
+});
+
+test("gaps and untimed or unknown results do not invent downtime", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform("p", [url, second])]);
+  cycleAt(store, { [url]: true, [second]: null }, dayAt(0));
+  cycleAt(store, { [url]: true, [second]: null }, dayAt(5));
+  cycleAt(store, { [url]: true, [second]: true }, null);
+  const p = store.list(dayAt(6))[0];
+  assert.deepEqual(p.uptime[url], { good: 2, samples: 2, firstSampleAt: dayAt(0), lastSampleAt: dayAt(5) });
+  assert.equal(p.uptime[second], undefined);
+  assert.equal(bucketRows(f.raw()).length, 2);
+  assert.equal(p.checkTimes[0], null);
+});
+
+test("platform uptime uses any healthy instance and skips all unknown cycles", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform("p", [url, second])]);
+  [[true, false], [true, null], [false, null], [null, null], [false, false], [true, true]].forEach(([a, b], i) => cycle(store, { [url]: a, [second]: b }, i * 10));
+  const p = store.list(dayAt(1))[0];
+  assert.deepEqual(p.platformUptime, { good: 3, samples: 5, firstSampleAt: time(0), lastSampleAt: time(50) });
+  assert.deepEqual(p.uptime[second], { good: 1, samples: 3, firstSampleAt: time(0), lastSampleAt: time(50) });
+});
+
+test("offsets normalize, out-of-order checks aggregate, and deleted platforms cascade", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  cycleAt(store, { [url]: true }, "2026-01-01T02:00:00+02:00");
+  cycleAt(store, { [url]: false }, "2026-01-01T00:30:00.000Z");
+  cycleAt(store, { [url]: true }, dayAt(1));
+  assert.deepEqual(store.list(dayAt(2))[0].uptime[url], { good: 2, samples: 3, firstSampleAt: dayAt(0), lastSampleAt: dayAt(1) });
+  const db = f.raw(); assert.equal(bucketRows(db).length, 2);
+  db.prepare("DELETE FROM platforms WHERE id = 'p'").run();
+  assert.equal(bucketRows(db).length, 0); assert.equal(bucketRows(db, "platform_check_buckets").length, 0);
+});
+
+test("v1 migration backfills only retained runs and rejects future schema", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  [true, false, true, true].forEach((r, i) => cycle(store, { [url]: r }, i * 10));
+  const db = f.raw();
+  db.exec("DROP TABLE instance_check_buckets; DROP TABLE platform_check_buckets; PRAGMA user_version = 1");
+  const upgraded = f.reopen();
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 2);
+  assert.deepEqual(upgraded.list(dayAt(1))[0].uptime[url], { good: 2, samples: 3, firstSampleAt: time(10), lastSampleAt: time(30) });
+  db.exec("PRAGMA user_version = 3");
+  assert.throws(() => new PlatformStore(f.directory), /Unsupported SQLite schema/);
+});
+
+test("stale and failed cycles never change rollups; invalid read clocks fail", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  cycle(store, { [url]: true }, 0); const db = f.raw(); const before = bucketRows(db);
+  db.exec("CREATE TRIGGER fail_cycle BEFORE UPDATE ON platforms BEGIN SELECT RAISE(ABORT, 'cycle failure'); END");
+  assert.throws(() => cycle(store, { [url]: false }, 10), /cycle failure/);
+  db.exec("DROP TRIGGER fail_cycle");
+  assert.equal(store.recordCycle("p", { [url]: false }, time(20), 0), false);
+  assert.deepEqual(bucketRows(db), before);
+  assert.throws(() => store.list("not a date"), /timestamp/);
+});
+
+test("legacy import tallies only timed known results", (t) => {
+  const p = platform();
+  p.checkedAt = time(20); p.checkTimes = [time(20), time(10), null]; p.checks = { [url]: [true, false, null] };
+  const f = fixture(t, [p]); const store = f.open();
+  assert.deepEqual(store.list(dayAt(1))[0].uptime[url], { good: 1, samples: 2, firstSampleAt: time(10), lastSampleAt: time(20) });
+  const untimed = fixture(t, [{ id: "u", name: "u", instances: [url], checks: { [url]: [true, true, true] } }]);
+  assert.equal(untimed.open().list(dayAt(1))[0].uptime, undefined);
+});
+
+test("the injected monitor clock places hourly buckets and a timeout adds a failed sample", async (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  let n = 0;
+  const monitor = new Monitor(store, async () => n % 2 === 0, () => dayAt(0, n++ * 3600));
+  for (let i = 0; i < 4; i++) await monitor.tick();
+  assert.equal(bucketRows(f.raw()).length, 4);
+  assert.deepEqual(store.list(dayAt(1))[0].uptime[url], { good: 2, samples: 4, firstSampleAt: dayAt(0), lastSampleAt: dayAt(0, 10800) });
+  const slow = new Monitor(store, () => new Promise(() => {}), () => dayAt(0, 14400), 5);
+  await slow.tick();
+  assert.equal(store.list(dayAt(1))[0].uptime[url].samples, 5);
+  assert.equal(store.list(dayAt(1))[0].uptime[url].good, 2);
 });

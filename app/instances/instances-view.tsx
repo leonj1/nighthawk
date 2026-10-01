@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePlatforms } from "../lib/use-platforms";
 import { relativeCheckTime } from "../lib/check-time";
+import { uptimeSummary } from "../lib/uptime";
 
 import {
   instanceStateHistory, platformStateHistory, statusLabels,
@@ -56,7 +57,9 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
     name: displayInstanceName(instance),
     healthUrl: platform.healthUrls?.[instance] ?? instance,
     history: instanceStateHistory(platform, instance),
+    uptime: uptimeSummary(platform.uptime?.[instance], now ?? Date.now()),
   }));
+  const platformUptime = uptimeSummary(platform.platformUptime, now ?? Date.now());
   const platformHistory = platformStateHistory(platform);
   const activityLabels = platformHistory.map(({ timestamp }, index) => {
     return timestamp && now !== null ? (
@@ -73,6 +76,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
         <h1 id="platform-name">Platform: {platform.name}</h1>
         <p className="status-legend">Green: successful check · Amber: instance offline · Red: platform offline · Gray: unchecked</p>
         <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
+        <p className={`platform-uptime platform-uptime--${platformUptime.meetsTarget === null ? "none" : platformUptime.meetsTarget ? "ok" : "below"}`}>{platformUptime.label} {platformUptime.coverage}{platformUptime.provisional ? " · provisional" : ""}</p>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <div className="platform-history">
           <div className="status-stack">
@@ -89,6 +93,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
       <section className="instances-panel" aria-labelledby="instances-heading">
         <h2 id="instances-heading">Instances</h2>
         <p className="status-note">State changes, newest first. Repeated results keep the same box.</p>
+        <p className="status-note">Uptime is the share of checks that succeeded in the last 30 days. Unknown results are not counted.</p>
         {instances.length ? (
           <div className="instances-overview">
             <div className="instance-columns">
@@ -96,6 +101,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
                 <article className="instance-column" key={`${instance.name}-${instanceIndex}`}>
                   <h3 title={instance.healthUrl}>{instance.name}</h3>
                   <p className="status-note">{instance.healthUrl}</p>
+                  <p className={`instance-uptime platform-uptime--${instance.uptime.meetsTarget === null ? "none" : instance.uptime.meetsTarget ? "ok" : "below"}`}>{instance.uptime.label} {instance.uptime.coverage}{instance.uptime.provisional ? " · provisional" : ""}</p>
                   <div className="status-stack">
                     {instance.history.map(({ status, timestamp }, index) => (
                       <div className="instance-transition" key={index}>

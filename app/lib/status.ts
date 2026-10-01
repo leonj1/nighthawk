@@ -2,6 +2,7 @@ export type CheckStatus = "healthy" | "critical" | "unknown";
 export type DashboardStatus = CheckStatus | "warning";
 export type PlatformState = { status: CheckStatus; timestamp: string | null };
 export type InstanceState = { status: "healthy" | "warning" | "unknown"; timestamp: string | null };
+export type UptimeSample = { good: number; samples: number; firstSampleAt: string; lastSampleAt: string };
 
 export type Platform = {
   id: string;
@@ -15,6 +16,8 @@ export type Platform = {
   stateHistory?: Record<string, InstanceState[]>;
   // Newest first. Each index represents the same check window for every instance.
   checks?: Record<string, (boolean | null)[]>;
+  uptime?: Record<string, UptimeSample>;
+  platformUptime?: UptimeSample;
 };
 
 export const storageKey = "nighthawk-platforms";
