@@ -58,9 +58,8 @@ It sets `NIGHTHAWK_DATA_DIR=/app/data`, so startup creates
    its existing database using the backup procedure below (or `platforms.json`
    for a pre-SQLite service) and keep a separate copy.** A new volume hides the
    ephemeral directory; attaching it does not migrate existing files.
-2. Run **Deploy through the API** to apply the manifest. A normal GitHub push
-   builds the image but does not submit the volume declaration to Deployer.
-   Deployer creates and attaches the volume and reuses it on subsequent Deploys.
+2. Push to `main` to run **Deploy through the API** and apply the manifest.
+   Deployer creates and attaches the volume and reuses it on subsequent deploys.
    Keep **one replica** and one monitoring process. If a manually attached,
    unowned volume already exists, reconcile ownership with the Deployer operator;
    do not remove a disk containing data to bypass an ownership error.
@@ -90,8 +89,8 @@ working database to rerun import. Preserve the JSON backup until verified.
 ### Diagnosing data missing after a deployment
 
 The volume declaration in this repository is not proof that a volume is attached
-to the live service. **Deploy through the API** is a manually triggered workflow;
-Railway's repository autodeploy only rebuilds the application. Check the exact
+to the live service. **Deploy through the API** runs on pushes to `main` and can
+also be started manually. Check the exact
 service and environment in Railway for an attached volume at `/app/data`, and
 check its runtime variables: `NIGHTHAWK_DATA_DIR=/app/data` and Railway's automatic
 `RAILWAY_VOLUME_MOUNT_PATH=/app/data`. Do not manually set the latter to simulate
