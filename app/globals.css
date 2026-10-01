@@ -1027,3 +1027,37 @@ h1 {
 .platform-uptime, .instance-uptime { font-size: 0.875rem; }
 .platform-uptime--below { color: #b42318; }
 .platform-uptime--none { color: #667085; }
+
+.dashboard-content {
+  display: grid;
+  grid-template-columns: minmax(0, 670px) minmax(340px, 1fr);
+  align-items: start;
+  gap: 48px;
+  max-width: 1600px;
+}
+
+.recent-incidents { min-width: 0; }
+.recent-incidents h2 { margin: 0 0 12px; font-size: 26px; font-weight: 500; }
+.incident-list { list-style: none; margin: 22px 0 0; padding: 0; }
+.incident-row { display: flex; gap: 14px; padding: 18px 0; border-top: 1px solid #303035; }
+.incident-square { flex: 0 0 16px; height: 16px; margin-top: 3px; border-radius: 4px; }
+.incident-square--healthy { background: #3ac55b; }
+.incident-square--critical { background: #ff8a8e; }
+.incident-square--unknown { background: #85858f; }
+.incident-body { min-width: 0; flex: 1; }
+.incident-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.incident-heading a { color: #ededf0; font-weight: 600; overflow-wrap: anywhere; text-decoration: none; }
+.incident-heading a:hover { text-decoration: underline; }
+.incident-heading a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.incident-label { font-size: 12px; border: 1px solid; border-radius: 5px; padding: 3px 7px; }
+.incident-label--recovered { color: #8ada9d; border-color: #33553b; }
+.incident-label--open { color: #ffb1b4; border-color: #644044; }
+.incident-instance { color: #babac4; font-size: 13px; margin-top: 7px; overflow-wrap: anywhere; }
+.incident-timing, .incident-duration { color: var(--muted); font-size: 12px; line-height: 1.7; margin-top: 6px; }
+.incident-duration strong { color: #dedee2; font-weight: 500; font-variant-numeric: tabular-nums; }
+.incident-empty { border: 1px solid #303035; border-radius: 10px; padding: 24px; margin-top: 22px; color: var(--muted); }
+
+@media (max-width: 1150px) {
+  .dashboard-content { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .recent-incidents { max-width: 670px; }
+}

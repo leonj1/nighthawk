@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { recentIncidents, incidentDuration } from "../app/lib/incidents.ts";
+
+const time = (seconds) => new Date(Date.UTC(2026, 9, 1, 0, 0, seconds)).toISOString();
+const state = (status, seconds) => ({ status, timestamp: seconds === null ? null : time(seconds) });
+const platform = (history, id = "p") => ({
+  id, name: id, instances: ["a"], stateHistory: { a: history },
+});
+
+test("an ongoing outage retains its start and its duration grows", () => {
+  const [incident] = recentIncidents([platform([state("warning", 10), state("healthy", 0)])]);
+  assert.equal(incident.currentStatus, "critical");
+  assert.equal(incident.recovered, false);
+  assert.equal(incident.startedAt, time(10));
+  assert.equal(incidentDuration(incident, Date.parse(time(75))), "1m 5s");
+  assert.equal(incidentDuration(incident, Date.parse(time(80))), "1m 10s");
+});
+
+test("recovery closes one outage and freezes downtime, even beyond the raw check window", () => {
+  const data = platform([state("healthy", 75), state("warning", 10), state("healthy", 0)]);
+  data.checks = { a: [true, true, true] };
+  const incidents = recentIncidents([data]);
+  assert.equal(incidents.length, 1);
+  assert.equal(incidents[0].recoveredAt, time(75));
+  assert.equal(incidents[0].currentStatus, "healthy");
+  assert.equal(incidents[0].recovered, true);
+  assert.equal(incidentDuration(incidents[0], Date.parse(time(999))), "1m 5s");
+});
+
+test("repeated failures and unknown checks do not invent recoveries", () => {
+  const history = [state("unknown", 40), state("warning", 30), state("unknown", 20), state("warning", 10)];
+  const [incident] = recentIncidents([platform(history)]);
+  assert.equal(incident.currentStatus, "unknown");
+  assert.equal(incident.startedAt, time(10));
+  assert.equal(incident.recovered, false);
+  const closed = recentIncidents([platform([state("healthy", 50), ...history])]);
+  assert.equal(closed.length, 1);
+  assert.equal(closed[0].recoveredAt, time(50));
+});
+
+test("separate outages remain separate with the actual current state on every row", () => {
+  const incidents = recentIncidents([platform([
+    state("warning", 40), state("healthy", 30), state("warning", 20), state("healthy", 10),
+  ])]);
+  assert.deepEqual(incidents.map((i) => [i.startedAt, i.recovered, i.currentStatus]), [
+    [time(40), false, "critical"], [time(20), true, "critical"],
+  ]);
+});
+
+test("latest ten are ordered globally by failure or recovery, independent of platform order", () => {
+  const platforms = Array.from({ length: 12 }, (_, i) => platform([state("warning", i)], `p${i}`));
+  platforms.push(platform([state("healthy", 20), state("warning", 0)], "recovered"));
+  const before = structuredClone(platforms);
+  const incidents = recentIncidents(platforms);
+  assert.equal(incidents.length, 10);
+  assert.equal(incidents[0].platformId, "recovered");
+  assert.equal(incidents[1].platformId, "p11");
+  assert.deepEqual(platforms, before);
+});
+
+test("healthy-only instances are excluded and partial platform failures are included", () => {
+  assert.deepEqual(recentIncidents([platform([state("healthy", 20), state("unknown", 0)])]), []);
+  assert.deepEqual(recentIncidents([]), []);
+  const data = { id: "p", name: "Platform", instances: ["a", "b"], checks: { a: [true], b: [false] }, checkedAt: time(10) };
+  const [incident] = recentIncidents([data]);
+  assert.equal(incident.instance, "b");
+  assert.equal(incident.startedAt, time(10));
+});
+
+test("missing or inconsistent times never fabricate durations or hide a recovery", () => {
+  for (const history of [
+    [state("warning", null)],
+    [state("healthy", null), state("warning", 10)],
+    [state("healthy", 5), state("warning", 10)],
+  ]) {
+    const [incident] = recentIncidents([platform(history)]);
+    assert.equal(incidentDuration(incident, Date.parse(time(20))), "Duration unavailable");
+    assert.equal(incident.recovered, history[0].status === "healthy");
+  }
+});

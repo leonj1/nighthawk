@@ -8,6 +8,7 @@ import { dashboardStatus, sortDashboardPlatforms, statusLabels, type DashboardSo
 import { usePlatforms, savePlatforms } from "../lib/use-platforms";
 import { healthUrl } from "../lib/health-url";
 import { uptimeSummary } from "../lib/uptime";
+import { RecentIncidents } from "./recent-incidents";
 
 function hostnameFromInput(value: string) {
   const candidate = value.trim();
@@ -201,6 +202,7 @@ export default function Dashboard() {
             ))}
           </div>
         </section>
+        <RecentIncidents platforms={createdPlatforms} error={error} />
       </div>
 
       {isDialogOpen ? (

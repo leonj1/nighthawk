@@ -9,6 +9,7 @@ import { transform } from "next/dist/build/swc/index.js";
 import * as status from "../../../app/lib/status.ts";
 import * as uptime from "../../../app/lib/uptime.ts";
 import * as health from "../../../app/lib/health-url.ts";
+import * as incidents from "../../../app/lib/incidents.ts";
 import { renderView } from "./instance-state-history.mjs";
 
 const require = createRequire(import.meta.url);
@@ -17,6 +18,11 @@ const second = "https://other.example.com/";
 const source = readFileSync(new URL("../../../app/dashboard/page.tsx", import.meta.url), "utf8");
 const { code } = await transform(source, {
   filename: "page.tsx",
+  jsc: { parser: { syntax: "typescript", tsx: true }, transform: { react: { runtime: "automatic" } } },
+  module: { type: "commonjs" },
+});
+const { code: incidentsCode } = await transform(readFileSync(new URL("../../../app/dashboard/recent-incidents.tsx", import.meta.url), "utf8"), {
+  filename: "recent-incidents.tsx",
   jsc: { parser: { syntax: "typescript", tsx: true }, transform: { react: { runtime: "automatic" } } },
   module: { type: "commonjs" },
 });
@@ -30,6 +36,16 @@ function dashboard(platform, now) {
       if (name === "../lib/status") return status;
       if (name === "../lib/uptime") return uptime;
       if (name === "../lib/health-url") return health;
+      if (name === "./recent-incidents") {
+        const child = {};
+        runInNewContext(incidentsCode, { exports: child, require(name) {
+          if (name === "../lib/incidents") return incidents;
+          if (name === "react") return { ...React, useState: () => [now, () => {}] };
+          if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
+          return require(name);
+        } });
+        return child;
+      }
       if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
       return require(name);
     },
