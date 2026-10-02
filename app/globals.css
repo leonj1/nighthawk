@@ -281,7 +281,7 @@ h1 {
 }
 
 .delete-platform-button {
-  margin: 8px 8px 0;
+  margin: 16px 0 8px 9px;
 }
 
 .delete-instance-button {

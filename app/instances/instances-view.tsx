@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { deleteInstance, usePlatforms } from "../lib/use-platforms";
+import { deleteInstance, deletePlatform, usePlatforms } from "../lib/use-platforms";
 import { relativeCheckTime } from "../lib/check-time";
 import { uptimeSummary } from "../lib/uptime";
 
@@ -43,9 +44,11 @@ function StatusBar({ status }: { status: DashboardStatus }) {
 }
 
 export default function InstancesView({ platformId }: InstancesViewProps) {
+  const router = useRouter();
   const { platforms, setPlatforms, error } = usePlatforms();
   const [deleteError, setDeleteError] = useState("");
   const [deletingUrl, setDeletingUrl] = useState("");
+  const [deletingPlatform, setDeletingPlatform] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -86,11 +89,28 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
     } finally { setDeletingUrl(""); }
   };
 
+  const removePlatform = async () => {
+    if (!platform.id || !window.confirm(`Delete ${platform.name} and all of its instances? This cannot be undone.`)) return;
+    setDeletingPlatform(true);
+    setDeleteError("");
+    try {
+      await deletePlatform(platform.id);
+      setPlatforms((current) => current.filter((candidate) => candidate.id !== platform.id));
+      router.push("/dashboard");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete platform.");
+      setDeletingPlatform(false);
+    }
+  };
+
   return (
     <main className="instances-page">
       <section className="platform-summary" aria-labelledby="platform-name">
         {platformId ? <Link className="instances-back-link" href="/dashboard">← Platforms</Link> : null}
         <h1 id="platform-name">Platform: {platform.name}</h1>
+        <button className="delete-platform-button" disabled={!platform.id || deletingPlatform} onClick={() => void removePlatform()} type="button">
+          {deletingPlatform ? "Deleting…" : "Delete platform"}
+        </button>
         <p className="status-legend">Green: successful check · Amber: instance offline · Red: platform offline · Gray: unchecked</p>
         <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
         <p className={`platform-uptime platform-uptime--${platformUptime.meetsTarget === null ? "none" : platformUptime.meetsTarget ? "ok" : "below"}`}>{platformUptime.label} {platformUptime.coverage}{platformUptime.provisional ? " · provisional" : ""}</p>
