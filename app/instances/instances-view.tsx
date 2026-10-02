@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePlatforms } from "../lib/use-platforms";
+import { deleteInstance, usePlatforms } from "../lib/use-platforms";
 import { relativeCheckTime } from "../lib/check-time";
 import { uptimeSummary } from "../lib/uptime";
 
@@ -43,7 +43,9 @@ function StatusBar({ status }: { status: DashboardStatus }) {
 }
 
 export default function InstancesView({ platformId }: InstancesViewProps) {
-  const { platforms, error } = usePlatforms();
+  const { platforms, setPlatforms, error } = usePlatforms();
+  const [deleteError, setDeleteError] = useState("");
+  const [deletingUrl, setDeletingUrl] = useState("");
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -54,6 +56,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
     ?? (!platformId ? platforms[0] : undefined)
     ?? { id: platformId ?? "", name: defaultPlatformName(platformId), instances: [] };
   const instances = platform.instances.map((instance) => ({
+    url: instance,
     name: displayInstanceName(instance),
     healthUrl: platform.healthUrls?.[instance] ?? instance,
     history: instanceStateHistory(platform, instance),
@@ -69,6 +72,20 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
     ) : <span key={index}>Time unavailable</span>;
   });
 
+  const removeInstance = async (instanceUrl: string) => {
+    if (!window.confirm(`Delete instance ${instanceUrl}? This cannot be undone.`)) return;
+    setDeletingUrl(instanceUrl);
+    setDeleteError("");
+    try {
+      await deleteInstance(platform.id, instanceUrl);
+      setPlatforms((current) => current.map((candidate) => candidate.id === platform.id
+        ? { ...candidate, instances: candidate.instances.filter((url) => url !== instanceUrl) }
+        : candidate));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete instance.");
+    } finally { setDeletingUrl(""); }
+  };
+
   return (
     <main className="instances-page">
       <section className="platform-summary" aria-labelledby="platform-name">
@@ -78,6 +95,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
         <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
         <p className={`platform-uptime platform-uptime--${platformUptime.meetsTarget === null ? "none" : platformUptime.meetsTarget ? "ok" : "below"}`}>{platformUptime.label} {platformUptime.coverage}{platformUptime.provisional ? " · provisional" : ""}</p>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
+        {deleteError ? <p className="form-error" role="alert">{deleteError}</p> : null}
         <div className="platform-history">
           <div className="status-stack">
             {platformHistory.map(({ status }, index) => (
@@ -102,6 +120,9 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
                   <h3 title={instance.healthUrl}>{instance.name}</h3>
                   <p className="status-note">{instance.healthUrl}</p>
                   <p className={`instance-uptime platform-uptime--${instance.uptime.meetsTarget === null ? "none" : instance.uptime.meetsTarget ? "ok" : "below"}`}>{instance.uptime.label} {instance.uptime.coverage}{instance.uptime.provisional ? " · provisional" : ""}</p>
+                  <button className="delete-instance-button" disabled={deletingUrl === instance.url} onClick={() => void removeInstance(instance.url)} type="button">
+                    {deletingUrl === instance.url ? "Deleting…" : "Delete instance"}
+                  </button>
                   <div className="status-stack">
                     {instance.history.map(({ status, timestamp }, index) => (
                       <div className="instance-transition" key={index}>

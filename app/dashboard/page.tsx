@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { dashboardStatus, sortDashboardPlatforms, statusLabels, type DashboardSort, type Platform } from "../lib/status";
 
-import { usePlatforms, savePlatforms } from "../lib/use-platforms";
+import { deletePlatform, usePlatforms, savePlatforms } from "../lib/use-platforms";
 import { healthUrl } from "../lib/health-url";
 import { uptimeSummary } from "../lib/uptime";
 import { RecentIncidents } from "./recent-incidents";
@@ -48,6 +48,8 @@ export default function Dashboard() {
   const [platformName, setPlatformName] = useState("");
   const [instances, setInstances] = useState([""]);
   const [formError, setFormError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deletingPlatformId, setDeletingPlatformId] = useState("");
   const [sort, setSort] = useState<DashboardSort>("status");
 
   const closeDialog = () => {
@@ -137,6 +139,18 @@ export default function Dashboard() {
 
   const platforms = sortDashboardPlatforms(createdPlatforms, sort);
 
+  const removePlatform = async (platform: Platform) => {
+    if (!window.confirm(`Delete ${platform.name} and all of its instances? This cannot be undone.`)) return;
+    setDeletingPlatformId(platform.id);
+    setDeleteError("");
+    try {
+      await deletePlatform(platform.id);
+      setCreatedPlatforms((current) => current.filter((candidate) => candidate.id !== platform.id));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete platform.");
+    } finally { setDeletingPlatformId(""); }
+  };
+
   return (
     <main className="dashboard-page">
       <header className="dashboard-header">
@@ -174,31 +188,36 @@ export default function Dashboard() {
           <p className="status-note">Health checks run every 10 seconds. HTTP 2xx responses are healthy.</p>
           <p className="status-note">Uptime is the share of checks that succeeded in the last 30 days. Unknown results are not counted.</p>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {deleteError ? <p className="form-error" role="alert">{deleteError}</p> : null}
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => (
-              <Link
-                aria-label={`View instances for ${platform.name}`}
-                className="platform-card"
-                href={`/instances/${encodeURIComponent(platform.id)}`}
-                key={platform.id}
-              >
-                <div
-                  aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}`}
-                  className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
-                  role="img"
-                />
-                <h2>{platform.name}</h2>
-                <p>
-                  {platform.instances.length
-                    ? `${platform.instances.length} ${platform.instances.length === 1 ? "instance" : "instances"}`
-                    : "No instances"}
-                </p>
-                {(() => { const uptime = uptimeSummary(platform.platformUptime, Date.now()); return (
-                  <p className={`platform-uptime platform-uptime--${uptime.meetsTarget === null ? "none" : uptime.meetsTarget ? "ok" : "below"}`} title={uptime.coverage}>
-                    {uptime.label}{uptime.coverage ? ` ${uptime.coverage}` : ""}{uptime.provisional ? " · provisional" : ""}
+              <article className="platform-card-container" key={platform.id}>
+                <Link
+                  aria-label={`View instances for ${platform.name}`}
+                  className="platform-card"
+                  href={`/instances/${encodeURIComponent(platform.id)}`}
+                >
+                  <div
+                    aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}`}
+                    className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
+                    role="img"
+                  />
+                  <h2>{platform.name}</h2>
+                  <p>
+                    {platform.instances.length
+                      ? `${platform.instances.length} ${platform.instances.length === 1 ? "instance" : "instances"}`
+                      : "No instances"}
                   </p>
-                ); })()}
-              </Link>
+                  {(() => { const uptime = uptimeSummary(platform.platformUptime, Date.now()); return (
+                    <p className={`platform-uptime platform-uptime--${uptime.meetsTarget === null ? "none" : uptime.meetsTarget ? "ok" : "below"}`} title={uptime.coverage}>
+                      {uptime.label}{uptime.coverage ? ` ${uptime.coverage}` : ""}{uptime.provisional ? " · provisional" : ""}
+                    </p>
+                  ); })()}
+                </Link>
+                <button className="delete-platform-button" disabled={deletingPlatformId === platform.id} onClick={() => void removePlatform(platform)} type="button">
+                  {deletingPlatformId === platform.id ? "Deleting…" : "Delete platform"}
+                </button>
+              </article>
             ))}
           </div>
         </section>

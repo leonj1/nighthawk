@@ -264,6 +264,47 @@ h1 {
   text-decoration: none;
 }
 
+.platform-card-container {
+  min-width: 0;
+}
+
+.delete-platform-button,
+.delete-instance-button {
+  background: transparent;
+  border: 1px solid #713f43;
+  border-radius: 8px;
+  color: #ff9da0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 9px;
+}
+
+.delete-platform-button {
+  margin: 8px 8px 0;
+}
+
+.delete-instance-button {
+  margin: 10px 0 18px 4px;
+}
+
+.delete-platform-button:hover,
+.delete-instance-button:hover {
+  background: rgba(255, 138, 142, 0.1);
+}
+
+.delete-platform-button:disabled,
+.delete-instance-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.delete-platform-button:focus-visible,
+.delete-instance-button:focus-visible {
+  outline: 3px solid #a093ff;
+  outline-offset: 3px;
+}
+
 .platform-card:focus-visible {
   border-radius: 23px;
   outline: 3px solid #a093ff;

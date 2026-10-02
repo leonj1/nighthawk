@@ -46,6 +46,27 @@ test("creation persists all entities with one unknown state; duplicate browser i
   assert.ok(db.prepare("SELECT id FROM instances").get().id);
 });
 
+test("instance and platform deletion are atomic and cascade through monitoring data", (t) => {
+  const f = fixture(t); const store = f.open();
+  store.add([platform("p", [url, second]), platform("other")]);
+  cycle(store, { [url]: true, [second]: false });
+  const revision = store.revision("p");
+  assert.equal(store.deleteInstance("p", second), true);
+  assert.equal(store.deleteInstance("p", second), false);
+  assert.equal(store.revision("p"), revision + 1);
+  assert.deepEqual(store.list().find((p) => p.id === "p").instances, [url]);
+  const db = f.raw();
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM instances WHERE platform_id = 'p'").get().n, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM instance_state_changes WHERE instance_id NOT IN (SELECT id FROM instances)").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM instance_check_buckets WHERE instance_id NOT IN (SELECT id FROM instances)").get().n, 0);
+  assert.equal(store.deletePlatform("p"), true);
+  assert.equal(store.deletePlatform("p"), false);
+  assert.deepEqual(store.list().map((p) => p.id), ["other"]);
+  for (const table of ["instances", "check_runs", "check_results", "platform_state_changes", "platform_check_buckets"]) {
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE platform_id = 'p'`).get().n, 0);
+  }
+});
+
 test("history survives a separate process, deduplicates repeated results and keeps three aligned cycles", (t) => {
   const f = fixture(t); const store = f.open(); store.add([platform()]);
   const initial = store.list()[0].createdAt;

@@ -5,7 +5,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Monitor } from "../app/lib/server/monitor.ts";
 import { PlatformStore } from "../app/lib/server/storage.ts";
-import { GET, POST } from "../app/api/platforms/route.ts";
+import { DELETE, GET, POST } from "../app/api/platforms/route.ts";
 
 test("API creates, imports and lists durable entities with the existing response shape; unsaved writes fail", async () => {
   const directory = mkdtempSync(path.join(process.cwd(), ".api-test-"));
@@ -48,6 +48,31 @@ test("API creates, imports and lists durable entities with the existing response
     // The test installs a no-op scheduler below; there are no in-flight probes.
     globalThis.nighthawkMonitor.store.close(); delete globalThis.nighthawkMonitor;
     db?.close();
+    if (previous === undefined) delete process.env.NIGHTHAWK_DATA_DIR; else process.env.NIGHTHAWK_DATA_DIR = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("API deletes instances and cascades platform deletion", async () => {
+  const directory = mkdtempSync(path.join(process.cwd(), ".api-delete-test-"));
+  const previous = process.env.NIGHTHAWK_DATA_DIR;
+  process.env.NIGHTHAWK_DATA_DIR = directory;
+  globalThis.nighthawkMonitor = new Monitor(new PlatformStore(directory), async () => false);
+  globalThis.nighthawkMonitor.start = () => {};
+  try {
+    const input = { id: "api", name: "API", instances: ["https://one.example.com", "https://two.example.com"] };
+    await POST(new Request("http://localhost/api/platforms", { method: "POST", body: JSON.stringify([input]) }));
+    const instanceResponse = await DELETE(new Request("http://localhost/api/platforms?platformId=api&instanceUrl=https%3A%2F%2Fone.example.com%2F", { method: "DELETE" }));
+    assert.equal(instanceResponse.status, 204);
+    assert.deepEqual((await (await GET()).json())[0].instances, ["https://two.example.com/"]);
+    assert.equal((await DELETE(new Request("http://localhost/api/platforms?platformId=api&instanceUrl=missing", { method: "DELETE" }))).status, 404);
+    assert.equal((await DELETE(new Request("http://localhost/api/platforms?platformId=api", { method: "DELETE" }))).status, 204);
+    assert.deepEqual(await (await GET()).json(), []);
+    assert.equal((await DELETE(new Request("http://localhost/api/platforms?platformId=api", { method: "DELETE" }))).status, 404);
+    assert.equal((await DELETE(new Request("http://localhost/api/platforms", { method: "DELETE" }))).status, 400);
+  } finally {
+    globalThis.nighthawkMonitor.stop();
+    globalThis.nighthawkMonitor.store.close(); delete globalThis.nighthawkMonitor;
     if (previous === undefined) delete process.env.NIGHTHAWK_DATA_DIR; else process.env.NIGHTHAWK_DATA_DIR = previous;
     rmSync(directory, { recursive: true, force: true });
   }

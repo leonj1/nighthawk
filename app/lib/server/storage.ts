@@ -250,6 +250,18 @@ export class PlatformStore {
     });
   }
 
+  deletePlatform(platformId: string): boolean {
+    return this.transaction(() => this.db.prepare("DELETE FROM platforms WHERE id = ?").run(platformId).changes === 1);
+  }
+
+  deleteInstance(platformId: string, instanceUrl: string): boolean {
+    return this.transaction(() => {
+      const deleted = this.db.prepare("DELETE FROM instances WHERE platform_id = ? AND url = ?").run(platformId, instanceUrl).changes === 1;
+      if (deleted) this.db.prepare("UPDATE platforms SET revision = revision + 1 WHERE id = ?").run(platformId);
+      return deleted;
+    });
+  }
+
   revision(platformId: string): number {
     const row = this.db.prepare("SELECT revision FROM platforms WHERE id = ?").get(platformId);
     if (!row) throw new Error("Platform does not exist.");

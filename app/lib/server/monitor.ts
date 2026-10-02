@@ -101,3 +101,13 @@ export async function addPlatforms(inputs: unknown[]) {
   monitor().store.add(additions);
   return monitor().store.list();
 }
+
+export async function deletePlatform(platformId: string) {
+  await startMonitor();
+  return monitor().store.deletePlatform(platformId);
+}
+
+export async function deleteInstance(platformId: string, instanceUrl: string) {
+  await startMonitor();
+  return monitor().store.deleteInstance(platformId, instanceUrl);
+}

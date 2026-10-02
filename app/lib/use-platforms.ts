@@ -9,6 +9,17 @@ export async function savePlatforms(platforms: Platform[]): Promise<Platform[]> 
   return data;
 }
 
+export async function deletePlatform(platformId: string): Promise<void> {
+  const response = await fetch(`/api/platforms?platformId=${encodeURIComponent(platformId)}`, { method: "DELETE" });
+  if (!response.ok) throw new Error((await response.json()).error || "Unable to delete platform.");
+}
+
+export async function deleteInstance(platformId: string, instanceUrl: string): Promise<void> {
+  const query = new URLSearchParams({ platformId, instanceUrl });
+  const response = await fetch(`/api/platforms?${query}`, { method: "DELETE" });
+  if (!response.ok) throw new Error((await response.json()).error || "Unable to delete instance.");
+}
+
 export function usePlatforms() {
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [error, setError] = useState("");

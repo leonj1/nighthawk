@@ -1,4 +1,4 @@
-import { addPlatforms, getPlatforms } from "../../lib/server/monitor.ts";
+import { addPlatforms, deleteInstance, deletePlatform, getPlatforms } from "../../lib/server/monitor.ts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -20,4 +20,20 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to save platforms." }, { status: 400 });
   }
+}
+
+export async function DELETE(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin && new URL(origin).host !== request.headers.get("host")) {
+    return Response.json({ error: "Invalid origin." }, { status: 403 });
+  }
+  const { searchParams } = new URL(request.url);
+  const platformId = searchParams.get("platformId");
+  const instanceUrl = searchParams.get("instanceUrl");
+  if (!platformId) return Response.json({ error: "Platform ID is required." }, { status: 400 });
+  const deleted = instanceUrl === null
+    ? await deletePlatform(platformId)
+    : await deleteInstance(platformId, instanceUrl);
+  if (!deleted) return Response.json({ error: instanceUrl === null ? "Platform not found." : "Instance not found." }, { status: 404 });
+  return new Response(null, { status: 204 });
 }
