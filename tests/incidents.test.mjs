@@ -1,11 +1,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { recentIncidents, incidentDuration } from "../app/lib/incidents.ts";
+import { recentIncidents, incidentDuration, sameAsPlatform } from "../app/lib/incidents.ts";
 
 const time = (seconds) => new Date(Date.UTC(2026, 9, 1, 0, 0, seconds)).toISOString();
 const state = (status, seconds) => ({ status, timestamp: seconds === null ? null : time(seconds) });
 const platform = (history, id = "p") => ({
   id, name: id, instances: ["a"], stateHistory: { a: history },
+});
+
+test("matching instance hostnames ignore scheme, trailing slash, case and www", () => {
+  for (const instance of ["https://example.com/", "http://example.com", "https://WWW.EXAMPLE.COM/"]) {
+    assert.equal(sameAsPlatform(instance, "EXAMPLE.com"), true, instance);
+    assert.equal(sameAsPlatform(instance, "www.example.com"), true, instance);
+  }
+});
+
+test("different hosts and non-URL inputs keep their instance labels", () => {
+  for (const instance of ["https://a.example.com", "https://example.net", "not a URL", "example.com", ""]) {
+    assert.equal(sameAsPlatform(instance, "example.com"), false, instance);
+  }
+  assert.equal(sameAsPlatform("https://prod.example.com", "Prod"), false);
 });
 
 test("an ongoing outage retains its start and its duration grows", () => {

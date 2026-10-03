@@ -10,6 +10,12 @@ export type Incident = {
   recovered: boolean;
 };
 
+export function sameAsPlatform(instance: string, platformName: string): boolean {
+  if (!URL.canParse(instance)) return false;
+  const normalize = (hostname: string) => hostname.trim().toLowerCase().replace(/^www\./, "");
+  return normalize(new URL(instance).hostname) === normalize(platformName);
+}
+
 // Pair failures with the next confirmed success. Unknown checks do not prove recovery.
 export function recentIncidents(platforms: readonly Platform[]): Incident[] {
   const incidents: Incident[] = [];
