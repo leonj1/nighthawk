@@ -83,6 +83,66 @@ test("a platform name reappears when another platform interrupts its run", () =>
   assert.equal((html.match(/<span class="sr-only">Example<\/span>/g) ?? []).length, 0);
 });
 
+test("screenshot's six blank platform cells come from repeated names and matching instance hosts, not missing data", () => {
+  const recoveredPlatform = (id, name, events) => {
+    const instance = `https://${name}`;
+    return {
+      id, name, instances: [instance],
+      stateHistory: { [instance]: events.flatMap(([hour, minute, second, duration]) => {
+        const recoveredAt = new Date(2026, 9, 2, hour, minute, second).getTime();
+        return [
+          { status: "healthy", timestamp: new Date(recoveredAt).toISOString() },
+          { status: "warning", timestamp: new Date(recoveredAt - duration * 1000).toISOString() },
+        ];
+      }) },
+    };
+  };
+  const platforms = [
+    recoveredPlatform("compute", "compute-wizard.com", [
+      [22, 15, 58, 9], [22, 9, 58, 10], [21, 34, 37, 10], [21, 12, 37, 10],
+      [20, 2, 0, 6], [20, 1, 30, 6], [17, 59, 33, 9], [17, 8, 2, 0],
+    ]),
+    recoveredPlatform("lrscribe", "lrscribe.com", [[17, 8, 4, 0]]),
+    recoveredPlatform("lrscribe-server", "lrscribe.joseserver.com", [[17, 8, 3, 0]]),
+  ];
+  const before = structuredClone(platforms);
+  const data = incidents.recentIncidents(platforms);
+  assert.equal(data.length, 10);
+  assert.deepEqual(data.map((incident) => incident.platformName), [
+    ...Array(7).fill("compute-wizard.com"), "lrscribe.com", "lrscribe.joseserver.com", "compute-wizard.com",
+  ], "every incident still has its platform name before rendering");
+
+  const rows = [...render(platforms).matchAll(/<tr class="incident-row">(.*?)<\/tr>/g)].map((match) => match[1]);
+  assert.equal(rows.length, 10, "no incidents were dropped");
+  rows.forEach((row, index) => {
+    const incident = data[index];
+    const cell = row.match(/<td class="incident-platform">(.*?)<\/td>/)[1];
+    if (index > 0 && index < 7) {
+      assert.equal(cell, '<span class="sr-only">compute-wizard.com</span>',
+        "the repeated name is only available to screen readers and no instance label remains");
+    } else {
+      assert.equal(cell, `<a href="/instances/${incident.platformId}">${incident.platformName}</a>`);
+    }
+    assert.ok(row.includes("Recovered"));
+    assert.ok(row.includes(`dateTime="${incident.recoveredAt}"`));
+    assert.ok(row.includes(`<strong>${incidents.incidentDuration(incident, now)}</strong>`));
+  });
+  assert.deepEqual(platforms, before, "rendering preserves the source data");
+
+  // A distinct hostname leaves a visible instance label even when the name repeats.
+  const instance = "https://worker.compute-wizard.com";
+  const distinctHost = { ...platforms[0], instances: [instance], stateHistory: {
+    [instance]: platforms[0].stateHistory[platforms[0].instances[0]],
+  } };
+  const distinctRows = [...render([distinctHost, ...platforms.slice(1)]).matchAll(/<tr class="incident-row">(.*?)<\/tr>/g)];
+  for (const [index, match] of distinctRows.entries()) {
+    if (index > 0 && index < 7) {
+      assert.ok(match[1].includes('<span class="sr-only">compute-wizard.com</span>'));
+      assert.ok(match[1].includes(`<p class="incident-instance">${instance}</p>`));
+    }
+  }
+});
+
 test("unknown, missing history and unavailable results are explicit", () => {
   assert.match(render([p([{ status: "unknown", timestamp: null }, failure])]), /Recovery unconfirmed/);
   assert.match(render([]), /No incidents in the available history/);
