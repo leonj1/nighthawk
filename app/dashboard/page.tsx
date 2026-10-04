@@ -9,6 +9,7 @@ import { usePlatforms, savePlatforms } from "../lib/use-platforms";
 import { healthUrl } from "../lib/health-url";
 import { uptimeSummary } from "../lib/uptime";
 import { RecentIncidents } from "./recent-incidents";
+import { StatusInfo, StatusLegend } from "./status-help";
 
 function hostnameFromInput(value: string) {
   const candidate = value.trim();
@@ -169,10 +170,9 @@ export default function Dashboard() {
               <option value="alphabetical">Alphabetical (A–Z)</option>
               <option value="status">Status (worst first)</option>
             </select>
+            <StatusLegend />
+            <StatusInfo />
           </div>
-          <p className="status-legend">Green: successful check · Amber: all instances were offline in this window, now recovered · Red: all instances offline · Gray: unchecked</p>
-          <p className="status-note">Health checks run every 10 seconds. HTTP 2xx responses are healthy.</p>
-          <p className="status-note">Uptime is the share of checks that succeeded in the last 30 days. Unknown results are not counted.</p>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => (
