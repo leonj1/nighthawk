@@ -11,14 +11,6 @@ function EventTime({ value, format }: { value: string | null; format: "date" | "
   return <time dateTime={value}>{new Date(value).toLocaleString(undefined, options)}</time>;
 }
 
-function HourTime({ value }: { value: string | null }) {
-  if (!value || !Number.isFinite(Date.parse(value))) return <>Hour unavailable</>;
-  const hour = new Date(value);
-  // Subtract minutes rather than resetting them so a repeated DST hour keeps its offset.
-  hour.setTime(hour.getTime() - (hour.getMinutes() * 60 + hour.getSeconds()) * 1000 - hour.getMilliseconds());
-  return <time dateTime={hour.toISOString()}>{hour.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</time>;
-}
-
 function IncidentPlatform({ incident, repeated }: { incident: Incident; repeated: boolean }) {
   return (
     <td className="incident-platform">
@@ -59,10 +51,8 @@ function IncidentTable({ days, now }: { days: IncidentDay[]; now: number | null 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const id = useId();
   const toggle = (key: string) => setCollapsed((current) => ({ ...current, [key]: !current[key] }));
-  const setAll = (value: boolean) => setCollapsed(Object.fromEntries(days.flatMap((day) => [
-    [`day-${day.key}`, value], ...day.hours.map((hour) => [`hour-${hour.key}`, value]),
-  ])));
-  const hourId = (key: string) => `${id}-hour-${key}`;
+  const setAll = (value: boolean) => setCollapsed(Object.fromEntries(days.map((day) => [day.key, value])));
+  const dayId = (key: string) => `${id}-day-${key}`;
   return (
     <>
     <div className="incident-group-actions" role="group" aria-label="Incident grouping">
@@ -79,40 +69,24 @@ function IncidentTable({ days, now }: { days: IncidentDay[]; now: number | null 
           <th scope="col" className="incident-started">Started</th>
         </tr></thead>
         {days.map((day) => {
-          const dayClosed = !!collapsed[`day-${day.key}`];
+          const dayClosed = !!collapsed[day.key];
           return <Fragment key={day.key}>
             <tbody>
               <tr className="incident-day"><th scope="rowgroup" colSpan={6}>
                 <button type="button" className="incident-group-toggle" aria-expanded={!dayClosed}
-                  aria-controls={day.hours.flatMap((hour) => [`${hourId(hour.key)}-heading`, hourId(hour.key)]).join(" ")}
-                  onClick={() => toggle(`day-${day.key}`)}>
+                  aria-controls={dayId(day.key)} onClick={() => toggle(day.key)}>
                   <span className="incident-group-chevron" aria-hidden="true">›</span>
                   <EventTime value={day.timestamp} format="date" />
-                  <span className="incident-group-count">{day.count} {day.count === 1 ? "incident" : "incidents"}</span>
+                  <span className="incident-group-count">{day.incidents.length} {day.incidents.length === 1 ? "incident" : "incidents"}</span>
                 </button>
               </th></tr>
             </tbody>
-            {day.hours.map((hour) => {
-              const hourClosed = !!collapsed[`hour-${hour.key}`];
-              return <Fragment key={hour.key}>
-                <tbody id={`${hourId(hour.key)}-heading`} hidden={dayClosed}>
-                  <tr className="incident-hour"><th scope="rowgroup" colSpan={6}>
-                    <button type="button" className="incident-group-toggle" aria-expanded={!hourClosed}
-                      aria-controls={hourId(hour.key)} onClick={() => toggle(`hour-${hour.key}`)}>
-                      <span className="incident-group-chevron" aria-hidden="true">›</span>
-                      <HourTime value={hour.timestamp} />
-                      <span className="incident-group-count">{hour.incidents.length} {hour.incidents.length === 1 ? "incident" : "incidents"}</span>
-                    </button>
-                  </th></tr>
-                </tbody>
-                <tbody id={hourId(hour.key)} hidden={dayClosed || hourClosed}>
-                  {hour.incidents.map((incident, index) => (
-                    <IncidentRow key={`${incident.platformId}-${incident.instance}-${index}`} incident={incident} now={now}
-                      repeated={index > 0 && hour.incidents[index - 1].platformId === incident.platformId} />
-                  ))}
-                </tbody>
-              </Fragment>;
-            })}
+            <tbody id={dayId(day.key)} hidden={dayClosed}>
+              {day.incidents.map((incident, index) => (
+                <IncidentRow key={`${incident.platformId}-${incident.instance}-${index}`} incident={incident} now={now}
+                  repeated={index > 0 && day.incidents[index - 1].platformId === incident.platformId} />
+              ))}
+            </tbody>
           </Fragment>;
         })}
       </table>
@@ -133,7 +107,7 @@ export function RecentIncidents({ platforms, error }: { platforms: Platform[]; e
   return (
     <section className="recent-incidents" aria-labelledby="recent-incidents-heading">
       <h2 id="recent-incidents-heading">Recent incidents</h2>
-      <p className="status-note">Latest 10 instance outages, grouped by local day and hour, newest failure or recovery first. Squares show current instance health; durations run from first observed failure to confirmed recovery.</p>
+      <p className="status-note">Latest 10 instance outages, grouped by local day, newest failure or recovery first. Squares show current instance health; durations run from first observed failure to confirmed recovery.</p>
       {error ? <p className="status-note">Incident history may be out of date while monitoring results are unavailable.</p> : null}
       {incidents.length ? <IncidentTable days={days} now={now} /> : (
         <p className="incident-empty">{error ? "Unable to load incident history." : "No incidents in the available history."}</p>

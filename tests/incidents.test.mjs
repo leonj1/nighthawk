@@ -8,7 +8,7 @@ const platform = (history, id = "p") => ({
   id, name: id, instances: ["a"], stateHistory: { a: history },
 });
 
-test("local day and hour groups follow recovery or failure time, preserve order, and keep unknown times", () => {
+test("local day groups follow recovery or failure time, preserve order across hours, and keep unknown times", () => {
   const at = (day, hour, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
   const outage = (startedAt, recoveredAt = null) => ({
     platformId: "p", platformName: "Platform", instance: "a", currentStatus: "healthy",
@@ -20,16 +20,16 @@ test("local day and hour groups follow recovery or failure time, preserve order,
   ];
   const before = structuredClone(data);
   const days = groupIncidentDays(data);
-  assert.deepEqual(days.map((day) => day.count), [2, 2, 2]);
-  assert.deepEqual(days.map((day) => day.hours.map((hour) => hour.incidents.length)), [[2], [1, 1], [2]]);
-  assert.deepEqual(days[0].hours[0].incidents, data.slice(0, 2));
-  assert.deepEqual(days[1].hours.flatMap((hour) => hour.incidents), data.slice(2, 4));
+  assert.deepEqual(days.map((day) => day.incidents.length), [2, 2, 2]);
+  assert.deepEqual(days[0].incidents, data.slice(0, 2));
+  assert.deepEqual(days[1].incidents, data.slice(2, 4));
   assert.equal(days[2].key, "unavailable");
+  assert.deepEqual(days[2].incidents, data.slice(4));
   assert.deepEqual(data, before);
   assert.deepEqual(groupIncidentDays([]), []);
 });
 
-test("falling back to a repeated local hour keeps separate groups with distinct offsets", () => {
+test("daylight saving time changes keep incidents in the same local day", () => {
   const previous = process.env.TZ;
   try {
     process.env.TZ = "America/New_York";
@@ -39,9 +39,8 @@ test("falling back to a repeated local hour keeps separate groups with distinct 
     }));
     const days = groupIncidentDays(data);
     assert.equal(days.length, 1);
-    assert.equal(days[0].hours.length, 2);
-    assert.notEqual(days[0].hours[0].key, days[0].hours[1].key);
-    assert.deepEqual(days[0].hours.map((hour) => hour.incidents[0].startedAt), data.map((incident) => incident.startedAt));
+    assert.equal(days[0].key, "2026-11-1");
+    assert.deepEqual(days[0].incidents, data);
   } finally {
     if (previous === undefined) delete process.env.TZ;
     else process.env.TZ = previous;

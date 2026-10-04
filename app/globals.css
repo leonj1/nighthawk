@@ -1175,7 +1175,6 @@ h1 {
 .incident-group-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .incident-group-actions button { background: transparent; color: var(--muted); border: 1px solid #303035; border-radius: 5px; padding: 6px 10px; min-height: 32px; font-size: 12px; cursor: pointer; }
 .incident-group-actions button:hover { color: var(--text); border-color: #55555d; }
-.incident-table .incident-hour th { color: var(--muted); font-size: 12px; font-weight: 400; padding-left: 16px; background: #151519; }
 .incident-group-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .incident-group-toggle:hover { color: var(--text); }
 .incident-group-toggle:focus-visible, .incident-group-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

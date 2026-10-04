@@ -10,8 +10,7 @@ export type Incident = {
   recovered: boolean;
 };
 
-export type IncidentHour = { key: string; timestamp: string | null; incidents: Incident[] };
-export type IncidentDay = { key: string; timestamp: string | null; hours: IncidentHour[]; count: number };
+export type IncidentDay = { key: string; timestamp: string | null; incidents: Incident[] };
 
 // Use the same event time as the feed ordering, grouped in the viewer's local time.
 export function groupIncidentDays(incidents: readonly Incident[]): IncidentDay[] {
@@ -21,20 +20,12 @@ export function groupIncidentDays(incidents: readonly Incident[]): IncidentDay[]
     const date = timestamp ? new Date(timestamp) : null;
     const known = date !== null && Number.isFinite(date.getTime());
     const dayKey = known ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : "unavailable";
-    // The offset keeps the two occurrences of an hour separate when clocks go back.
-    const hourKey = known ? `${dayKey}-${date.getHours()}-${date.getTimezoneOffset()}` : "unavailable";
     let day = days.get(dayKey);
     if (!day) {
-      day = { key: dayKey, timestamp, hours: [], count: 0 };
+      day = { key: dayKey, timestamp, incidents: [] };
       days.set(dayKey, day);
     }
-    let hour = day.hours.find((group) => group.key === hourKey);
-    if (!hour) {
-      hour = { key: hourKey, timestamp, incidents: [] };
-      day.hours.push(hour);
-    }
-    hour.incidents.push(incident);
-    day.count += 1;
+    day.incidents.push(incident);
   }
   return [...days.values()];
 }

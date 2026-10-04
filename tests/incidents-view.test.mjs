@@ -83,7 +83,7 @@ test("a platform name reappears when another platform interrupts its run", () =>
   assert.equal((html.match(/<span class="sr-only">Example<\/span>/g) ?? []).length, 0);
 });
 
-test("platform names repeat at hour boundaries while consecutive rows within an hour remain compact", () => {
+test("consecutive platform names stay compact across hours within the same day", () => {
   const recoveredPlatform = (id, name, events) => {
     const instance = `https://${name}`;
     return {
@@ -117,7 +117,7 @@ test("platform names repeat at hour boundaries while consecutive rows within an 
   rows.forEach((row, index) => {
     const incident = data[index];
     const cell = row.match(/<td class="incident-platform">(.*?)<\/td>/)[1];
-    if ([1, 3, 5].includes(index)) {
+    if (index >= 1 && index <= 6) {
       assert.equal(cell, '<span class="sr-only">compute-wizard.com</span>',
         "the repeated name is only available to screen readers and no instance label remains");
     } else {
@@ -136,27 +136,29 @@ test("platform names repeat at hour boundaries while consecutive rows within an 
   } };
   const distinctRows = [...render([distinctHost, ...platforms.slice(1)]).matchAll(/<tr class="incident-row">(.*?)<\/tr>/g)];
   for (const [index, match] of distinctRows.entries()) {
-    if ([1, 3, 5].includes(index)) {
+    if (index >= 1 && index <= 6) {
       assert.ok(match[1].includes('<span class="sr-only">compute-wizard.com</span>'));
       assert.ok(match[1].includes(`<p class="incident-instance">${instance}</p>`));
     }
   }
 });
 
-test("hour headings show local hour starts, incident counts, and accessible disclosure controls", () => {
+test("day headings combine different hours with incident counts and accessible disclosure controls", () => {
   const state = (hour, minute) => ({ status: "warning", timestamp: new Date(2026, 9, 2, hour, minute).toISOString() });
   const html = render([
     p([state(15, 40)]), { ...p([state(15, 10)]), id: "second" }, { ...p([state(14, 59)]), id: "third" },
+    { ...p([{ status: "warning", timestamp: new Date(2026, 9, 1, 23, 59).toISOString() }]), id: "previous" },
   ]);
-  const headings = [...html.matchAll(/<tr class="incident-hour">(.*?)<\/tr>/g)].map((match) => match[1]);
+  const headings = [...html.matchAll(/<tr class="incident-day">(.*?)<\/tr>/g)].map((match) => match[1]);
   assert.equal(headings.length, 2);
-  for (const [index, hour] of [15, 14].entries()) {
-    assert.ok(headings[index].includes(`dateTime="${new Date(2026, 9, 2, hour).toISOString()}"`));
+  for (const [index, day] of [2, 1].entries()) {
+    assert.ok(headings[index].includes(new Date(2026, 9, day).toLocaleDateString(undefined, { dateStyle: "medium" })));
     assert.match(headings[index], /aria-expanded="true"/);
   }
-  assert.match(headings[0], /2 incidents/);
+  assert.match(headings[0], /3 incidents/);
   assert.match(headings[1], /1 incident/);
-  assert.match(html, /3 incidents/);
+  assert.doesNotMatch(html, /incident-hour|Hour unavailable|grouped by local day and hour/);
+  assert.equal((html.match(/aria-expanded=/g) ?? []).length, 2, "only days have disclosure controls");
   assert.match(html, /Expand all/);
   assert.match(html, /Collapse all/);
   for (const match of html.matchAll(/aria-controls="([^"]+)"/g)) {
@@ -164,7 +166,7 @@ test("hour headings show local hour starts, incident counts, and accessible disc
   }
 });
 
-test("day and hour toggles hide their content independently, survive refresh, and support bulk actions", () => {
+test("day toggles hide all their incidents, survive refresh, and support bulk actions", () => {
   // Capture real JSX handlers and keep hook state across renders to exercise the controls.
   const hooks = [];
   let cursor = 0;
@@ -194,25 +196,26 @@ test("day and hour toggles hide their content independently, survive refresh, an
     return renderToStaticMarkup(React.createElement(interactive.RecentIncidents, { platforms, error: "" }));
   };
   const hiddenGroups = (html) => (html.match(/<tbody[^>]* hidden=""/g) ?? []).length;
-  const days = () => buttons.filter((button) => button["aria-controls"]?.includes("-heading"));
-  const hours = () => buttons.filter((button) => button["aria-controls"] && !button["aria-controls"].includes("-heading"));
+  const days = () => buttons.filter((button) => button["aria-controls"]);
   assert.equal(hiddenGroups(draw()), 0);
-  hours()[0].onClick();
-  assert.equal(hiddenGroups(draw()), 1);
-  assert.equal(hours()[0]["aria-expanded"], false);
+  assert.equal(days().length, 2);
   days()[0].onClick();
-  assert.equal(hiddenGroups(draw()), 4, "the day hides its two hour headers and two row groups");
+  const collapsedDay = draw();
+  assert.equal(hiddenGroups(collapsedDay), 1, "the day hides one row group containing both hours");
+  const contents = collapsedDay.match(/<tbody[^>]* hidden="">(.*?)<\/tbody>/)[1];
+  assert.equal((contents.match(/class="incident-row"/g) ?? []).length, 2);
+  assert.equal(days()[0]["aria-expanded"], false);
   assert.equal(days()[1]["aria-expanded"], true, "the other day stays open");
-  days()[0].onClick();
-  assert.equal(hiddenGroups(draw()), 1, "reopening the day preserves its closed hour");
   platforms = structuredClone(platforms);
   assert.equal(hiddenGroups(draw()), 1, "polling new platform objects preserves the selection");
+  days()[0].onClick();
+  assert.equal(hiddenGroups(draw()), 0, "reopening the day shows all its incidents");
   buttons.find((button) => button.children === "Collapse all").onClick();
-  assert.equal(hiddenGroups(draw()), 6);
-  assert.ok([...days(), ...hours()].every((button) => button["aria-expanded"] === false));
+  assert.equal(hiddenGroups(draw()), 2);
+  assert.ok(days().every((button) => button["aria-expanded"] === false));
   buttons.find((button) => button.children === "Expand all").onClick();
   assert.equal(hiddenGroups(draw()), 0);
-  assert.ok([...days(), ...hours()].every((button) => button["aria-expanded"] === true));
+  assert.ok(days().every((button) => button["aria-expanded"] === true));
 });
 
 test("unknown, missing history and unavailable results are explicit", () => {
