@@ -650,16 +650,90 @@ h1 {
   border-color: #292930;
 }
 
-.status-legend,
-.status-note {
+.status-legend {
   color: #9ca6ba;
+  display: flex;
+  flex-wrap: wrap;
   font-size: 13px;
-  line-height: 1.6;
-  margin-top: 16px;
+  gap: 6px 14px;
+  list-style: none;
+  margin: 0 0 0 auto;
+  padding: 0;
 }
 
-.status-note {
+.status-legend li {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.status-swatch {
+  border: 2px solid #071d0e;
+  border-radius: 4px;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+.status-swatch.platform-tile--healthy {
+  background: #034a13;
+}
+
+.status-info {
+  position: relative;
+}
+
+.status-info-button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #66666d;
+  border-radius: 50%;
+  color: #9ca6ba;
+  cursor: pointer;
+  display: flex;
+  font-family: Georgia, serif;
+  font-size: 13px;
+  font-style: italic;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+
+.status-info-button:hover,
+.status-info-button[aria-expanded="true"] {
+  border-color: #a093ff;
+  color: #f7f8fb;
+}
+
+.status-info-button:focus-visible {
+  outline: 3px solid #a093ff;
+  outline-offset: 3px;
+}
+
+.status-info-popover {
+  background: #202024;
+  border: 1px solid #44444b;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #c4cad6;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 14px 16px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(320px, calc(100vw - 32px));
+  z-index: 20;
+}
+
+.status-info-popover p + p {
   margin-top: 6px;
+}
+
+.status-info-popover strong {
+  color: #f7f8fb;
+  font-weight: 600;
 }
 
 .activity-labels {
