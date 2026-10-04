@@ -66,6 +66,21 @@ export function platformStateHistory(platform: Platform): PlatformState[] {
   return history;
 }
 
+export function daysSinceOutage(platform: Platform, now: number): number {
+  if (platformStatus(platform) === "critical") return 0;
+
+  const history = platformStateHistory(platform);
+  const outageIndex = history.findIndex((state) => state.status === "critical");
+  // Unknown results cannot close an outage. Count from the first confirmed
+  // recovery after the most recent total outage, even outside the raw checks.
+  const since = outageIndex === -1
+    ? platform.createdAt ?? history[history.length - 1]?.timestamp
+    : history.slice(0, outageIndex).reverse().find((state) => state.status === "healthy")?.timestamp;
+  const timestamp = Date.parse(since ?? "");
+  if (!Number.isFinite(timestamp) || !Number.isFinite(now)) return 0;
+  return Math.max(0, Math.floor((now - timestamp) / 86_400_000));
+}
+
 export function dashboardStatus(platform: Platform): DashboardStatus {
   const current = platformStatus(platform);
   if (current !== "healthy") return current;

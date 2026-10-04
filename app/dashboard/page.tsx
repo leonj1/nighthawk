@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { dashboardStatus, sortDashboardPlatforms, statusLabels, type DashboardSort, type Platform } from "../lib/status";
+import { dashboardStatus, daysSinceOutage, sortDashboardPlatforms, statusLabels, type DashboardSort, type Platform } from "../lib/status";
 
 import { usePlatforms, savePlatforms } from "../lib/use-platforms";
 import { healthUrl } from "../lib/health-url";
@@ -183,10 +183,12 @@ export default function Dashboard() {
                   href={`/instances/${encodeURIComponent(platform.id)}`}
                 >
                   <div
-                    aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}`}
+                    aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}, ${daysSinceOutage(platform, Date.now())} days since outage`}
                     className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
                     role="img"
-                  />
+                  >
+                    {daysSinceOutage(platform, Date.now())}
+                  </div>
                   <h2>{platform.name}</h2>
                   <p>
                     {platform.instances.length

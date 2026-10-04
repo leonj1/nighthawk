@@ -6,6 +6,10 @@ Node server is running. Instances begin with one gray box, then gain a green
 history uses gray, green, and red for unknown, available, and fully offline.
 The dashboard uses amber when a currently available platform had a total outage
 within the latest three check cycles.
+Each dashboard box shows only the number of full days since the most recent
+platform outage recovered. An ongoing outage shows 0. Platforms with no recorded
+outage count from creation; unavailable timestamps show 0. Individual instance
+failures do not reset the count while another instance keeps the platform online.
 
 Platforms, instances, the latest three aligned check cycles, state transitions,
 and hourly uptime counts persist in SQLite. Uptime is healthy checks divided by

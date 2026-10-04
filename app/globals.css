@@ -317,16 +317,24 @@ h1 {
 }
 
 .platform-tile {
+  align-items: center;
   aspect-ratio: 105 / 88;
   background: #034a13;
   border: 8px solid #071d0e;
   border-radius: 23px;
+  color: #fff;
+  display: flex;
+  font-size: clamp(16px, 3vw, 32px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  justify-content: center;
   min-width: 0;
   transition: filter 160ms ease, transform 160ms ease;
 }
 
 .platform-tile--critical {
   background: #ff8a8e;
+  color: #071d0e;
 }
 
 .platform-tile--warning {
