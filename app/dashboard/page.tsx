@@ -175,34 +175,39 @@ export default function Dashboard() {
           </div>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <div className="platform-grid" aria-label="Platform status overview">
-            {platforms.map((platform) => (
-              <article className="platform-card-container" key={platform.id}>
-                <Link
-                  aria-label={`View instances for ${platform.name}`}
-                  className="platform-card"
-                  href={`/instances/${encodeURIComponent(platform.id)}`}
-                >
-                  <div
-                    aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}, ${daysSinceOutage(platform, Date.now())} days since outage`}
-                    className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
-                    role="img"
+            {platforms.map((platform) => {
+              const days = daysSinceOutage(platform, Date.now());
+              const outageAge = `${days} ${days === 1 ? "day" : "days"} since outage`;
+              return (
+                <article className="platform-card-container" key={platform.id}>
+                  <Link
+                    aria-label={`View instances for ${platform.name}`}
+                    className="platform-card"
+                    href={`/instances/${encodeURIComponent(platform.id)}`}
+                    title={`${platform.name}: ${outageAge}`}
                   >
-                    {daysSinceOutage(platform, Date.now())}
-                  </div>
-                  <h2>{platform.name}</h2>
-                  <p>
-                    {platform.instances.length
-                      ? `${platform.instances.length} ${platform.instances.length === 1 ? "instance" : "instances"}`
-                      : "No instances"}
-                  </p>
-                  {(() => { const uptime = uptimeSummary(platform.platformUptime, Date.now()); return (
-                    <p className={`platform-uptime platform-uptime--${uptime.meetsTarget === null ? "none" : uptime.meetsTarget ? "ok" : "below"}`} title={uptime.coverage}>
-                      {uptime.label}{uptime.coverage ? ` ${uptime.coverage}` : ""}{uptime.provisional ? " · provisional" : ""}
+                    <div
+                      aria-label={`${platform.name}: ${statusLabels[dashboardStatus(platform)]}, ${outageAge}`}
+                      className={`platform-tile platform-tile--${dashboardStatus(platform)}`}
+                      role="img"
+                    >
+                      {days}
+                    </div>
+                    <h2>{platform.name}</h2>
+                    <p>
+                      {platform.instances.length
+                        ? `${platform.instances.length} ${platform.instances.length === 1 ? "instance" : "instances"}`
+                        : "No instances"}
                     </p>
+                    {(() => { const uptime = uptimeSummary(platform.platformUptime, Date.now()); return (
+                      <p className={`platform-uptime platform-uptime--${uptime.meetsTarget === null ? "none" : uptime.meetsTarget ? "ok" : "below"}`} title={uptime.coverage}>
+                        {uptime.label}{uptime.coverage ? ` ${uptime.coverage}` : ""}{uptime.provisional ? " · provisional" : ""}
+                      </p>
                   ); })()}
                 </Link>
               </article>
-            ))}
+              );
+            })}
           </div>
         </section>
         <RecentIncidents platforms={createdPlatforms} error={error} />
