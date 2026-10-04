@@ -10,6 +10,35 @@ export type Incident = {
   recovered: boolean;
 };
 
+export type IncidentHour = { key: string; timestamp: string | null; incidents: Incident[] };
+export type IncidentDay = { key: string; timestamp: string | null; hours: IncidentHour[]; count: number };
+
+// Use the same event time as the feed ordering, grouped in the viewer's local time.
+export function groupIncidentDays(incidents: readonly Incident[]): IncidentDay[] {
+  const days = new Map<string, IncidentDay>();
+  for (const incident of incidents) {
+    const timestamp = incident.recovered ? incident.recoveredAt : incident.startedAt;
+    const date = timestamp ? new Date(timestamp) : null;
+    const known = date !== null && Number.isFinite(date.getTime());
+    const dayKey = known ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : "unavailable";
+    // The offset keeps the two occurrences of an hour separate when clocks go back.
+    const hourKey = known ? `${dayKey}-${date.getHours()}-${date.getTimezoneOffset()}` : "unavailable";
+    let day = days.get(dayKey);
+    if (!day) {
+      day = { key: dayKey, timestamp, hours: [], count: 0 };
+      days.set(dayKey, day);
+    }
+    let hour = day.hours.find((group) => group.key === hourKey);
+    if (!hour) {
+      hour = { key: hourKey, timestamp, incidents: [] };
+      day.hours.push(hour);
+    }
+    hour.incidents.push(incident);
+    day.count += 1;
+  }
+  return [...days.values()];
+}
+
 export function sameAsPlatform(instance: string, platformName: string): boolean {
   if (!URL.canParse(instance)) return false;
   const normalize = (hostname: string) => hostname.trim().toLowerCase().replace(/^www\./, "");

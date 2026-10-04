@@ -40,7 +40,7 @@ function dashboard(platform, now) {
         const child = {};
         runInNewContext(incidentsCode, { exports: child, require(name) {
           if (name === "../lib/incidents") return incidents;
-          if (name === "react") return { ...React, useState: () => [now, () => {}] };
+          if (name === "react") return { ...React, useState: (initial) => [initial === null ? now : initial, () => {}] };
           if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
           return require(name);
         } });

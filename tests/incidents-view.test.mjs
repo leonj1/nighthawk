@@ -18,7 +18,7 @@ const { code } = await transform(readFileSync(new URL("../app/dashboard/recent-i
 });
 const exports = {};
 runInNewContext(code, { exports, require(name) {
-  if (name === "react") return { ...React, useState: () => [now, () => {}] };
+  if (name === "react") return { ...React, useState: (initial) => [initial === null ? now : initial, () => {}] };
   if (name === "../lib/incidents") return incidents;
   if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
   return require(name);
@@ -83,7 +83,7 @@ test("a platform name reappears when another platform interrupts its run", () =>
   assert.equal((html.match(/<span class="sr-only">Example<\/span>/g) ?? []).length, 0);
 });
 
-test("screenshot's six blank platform cells come from repeated names and matching instance hosts, not missing data", () => {
+test("platform names repeat at hour boundaries while consecutive rows within an hour remain compact", () => {
   const recoveredPlatform = (id, name, events) => {
     const instance = `https://${name}`;
     return {
@@ -117,7 +117,7 @@ test("screenshot's six blank platform cells come from repeated names and matchin
   rows.forEach((row, index) => {
     const incident = data[index];
     const cell = row.match(/<td class="incident-platform">(.*?)<\/td>/)[1];
-    if (index > 0 && index < 7) {
+    if ([1, 3, 5].includes(index)) {
       assert.equal(cell, '<span class="sr-only">compute-wizard.com</span>',
         "the repeated name is only available to screen readers and no instance label remains");
     } else {
@@ -136,11 +136,83 @@ test("screenshot's six blank platform cells come from repeated names and matchin
   } };
   const distinctRows = [...render([distinctHost, ...platforms.slice(1)]).matchAll(/<tr class="incident-row">(.*?)<\/tr>/g)];
   for (const [index, match] of distinctRows.entries()) {
-    if (index > 0 && index < 7) {
+    if ([1, 3, 5].includes(index)) {
       assert.ok(match[1].includes('<span class="sr-only">compute-wizard.com</span>'));
       assert.ok(match[1].includes(`<p class="incident-instance">${instance}</p>`));
     }
   }
+});
+
+test("hour headings show local hour starts, incident counts, and accessible disclosure controls", () => {
+  const state = (hour, minute) => ({ status: "warning", timestamp: new Date(2026, 9, 2, hour, minute).toISOString() });
+  const html = render([
+    p([state(15, 40)]), { ...p([state(15, 10)]), id: "second" }, { ...p([state(14, 59)]), id: "third" },
+  ]);
+  const headings = [...html.matchAll(/<tr class="incident-hour">(.*?)<\/tr>/g)].map((match) => match[1]);
+  assert.equal(headings.length, 2);
+  for (const [index, hour] of [15, 14].entries()) {
+    assert.ok(headings[index].includes(`dateTime="${new Date(2026, 9, 2, hour).toISOString()}"`));
+    assert.match(headings[index], /aria-expanded="true"/);
+  }
+  assert.match(headings[0], /2 incidents/);
+  assert.match(headings[1], /1 incident/);
+  assert.match(html, /3 incidents/);
+  assert.match(html, /Expand all/);
+  assert.match(html, /Collapse all/);
+  for (const match of html.matchAll(/aria-controls="([^"]+)"/g)) {
+    for (const id of match[1].split(" ")) assert.ok(html.includes(`id="${id}"`), id);
+  }
+});
+
+test("day and hour toggles hide their content independently, survive refresh, and support bulk actions", () => {
+  // Capture real JSX handlers and keep hook state across renders to exercise the controls.
+  const hooks = [];
+  let cursor = 0;
+  let buttons = [];
+  const runtime = require("react/jsx-runtime");
+  const capture = (factory) => (type, props, key) => {
+    if (type === "button") buttons.push(props);
+    return factory(type, props, key);
+  };
+  const interactive = {};
+  runInNewContext(code, { exports: interactive, require(name) {
+    if (name === "react") return { ...React, useState(initial) {
+      const index = cursor++;
+      if (!(index in hooks)) hooks[index] = initial === null ? now : initial;
+      return [hooks[index], (update) => { hooks[index] = typeof update === "function" ? update(hooks[index]) : update; }];
+    } };
+    if (name === "react/jsx-runtime") return { ...runtime, jsx: capture(runtime.jsx), jsxs: capture(runtime.jsxs) };
+    if (name === "../lib/incidents") return incidents;
+    if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
+    return require(name);
+  } });
+  const state = (day, hour, minute) => ({ status: "warning", timestamp: new Date(2026, 9, day, hour, minute).toISOString() });
+  let platforms = [p([state(2, 15, 10)]), { ...p([state(2, 14, 10)]), id: "second" }, { ...p([state(1, 15, 10)]), id: "third" }];
+  const draw = () => {
+    cursor = 0;
+    buttons = [];
+    return renderToStaticMarkup(React.createElement(interactive.RecentIncidents, { platforms, error: "" }));
+  };
+  const hiddenGroups = (html) => (html.match(/<tbody[^>]* hidden=""/g) ?? []).length;
+  const days = () => buttons.filter((button) => button["aria-controls"]?.includes("-heading"));
+  const hours = () => buttons.filter((button) => button["aria-controls"] && !button["aria-controls"].includes("-heading"));
+  assert.equal(hiddenGroups(draw()), 0);
+  hours()[0].onClick();
+  assert.equal(hiddenGroups(draw()), 1);
+  assert.equal(hours()[0]["aria-expanded"], false);
+  days()[0].onClick();
+  assert.equal(hiddenGroups(draw()), 4, "the day hides its two hour headers and two row groups");
+  assert.equal(days()[1]["aria-expanded"], true, "the other day stays open");
+  days()[0].onClick();
+  assert.equal(hiddenGroups(draw()), 1, "reopening the day preserves its closed hour");
+  platforms = structuredClone(platforms);
+  assert.equal(hiddenGroups(draw()), 1, "polling new platform objects preserves the selection");
+  buttons.find((button) => button.children === "Collapse all").onClick();
+  assert.equal(hiddenGroups(draw()), 6);
+  assert.ok([...days(), ...hours()].every((button) => button["aria-expanded"] === false));
+  buttons.find((button) => button.children === "Expand all").onClick();
+  assert.equal(hiddenGroups(draw()), 0);
+  assert.ok([...days(), ...hours()].every((button) => button["aria-expanded"] === true));
 });
 
 test("unknown, missing history and unavailable results are explicit", () => {
