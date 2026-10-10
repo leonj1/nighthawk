@@ -1,3 +1,5 @@
+import { uptimePercent } from "./uptime.ts";
+
 export type CheckStatus = "healthy" | "critical" | "unknown";
 export type DashboardStatus = CheckStatus | "warning";
 export type PlatformState = { status: CheckStatus; timestamp: string | null };
@@ -89,7 +91,7 @@ export function dashboardStatus(platform: Platform): DashboardStatus {
     : "healthy";
 }
 
-export type DashboardSort = "alphabetical" | "status";
+export type DashboardSort = "alphabetical" | "status" | "sla-ascending" | "sla-descending";
 
 // Known outages first; inconclusive checks stay ahead of confirmed health.
 const dashboardStatusOrder: Record<DashboardStatus, number> = {
@@ -101,6 +103,16 @@ const dashboardStatusOrder: Record<DashboardStatus, number> = {
 
 export function sortDashboardPlatforms(platforms: readonly Platform[], sort: DashboardSort): Platform[] {
   return [...platforms].sort((a, b) => {
+    if (sort === "sla-ascending" || sort === "sla-descending") {
+      const aPercent = uptimePercent(a.platformUptime);
+      const bPercent = uptimePercent(b.platformUptime);
+      // Missing data stays last in either direction; it is not 0% uptime.
+      if (aPercent === null && bPercent !== null) return 1;
+      if (aPercent !== null && bPercent === null) return -1;
+      if (aPercent !== null && bPercent !== null && aPercent !== bPercent) {
+        return sort === "sla-ascending" ? aPercent - bPercent : bPercent - aPercent;
+      }
+    }
     const statusDifference = sort === "status"
       ? dashboardStatusOrder[dashboardStatus(a)] - dashboardStatusOrder[dashboardStatus(b)]
       : 0;

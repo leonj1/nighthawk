@@ -165,10 +165,12 @@ export default function Dashboard() {
             <select
               id="platform-sort"
               value={sort}
-              onChange={(event) => setSort(event.target.value === "status" ? "status" : "alphabetical")}
+              onChange={(event) => setSort(event.target.value as DashboardSort)}
             >
               <option value="alphabetical">Alphabetical (A–Z)</option>
               <option value="status">Status (worst first)</option>
+              <option value="sla-ascending">SLA (ascending)</option>
+              <option value="sla-descending">SLA (descending)</option>
             </select>
             <StatusLegend />
             <StatusInfo />

@@ -10,6 +10,10 @@ Each dashboard box shows only the number of full days since the most recent
 platform outage recovered. An ongoing outage shows 0. Platforms with no recorded
 outage count from creation; unavailable timestamps show 0. Individual instance
 failures do not reset the count while another instance keeps the platform online.
+Use the dashboard's **Sort by** menu to order platforms alphabetically, by status,
+or by SLA ascending or descending. SLA sorting uses the displayed 30-day platform
+uptime percentage; platforms without uptime data appear last in either direction,
+and equal percentages are ordered alphabetically.
 
 Platforms, instances, the latest three aligned check cycles, state transitions,
 and hourly uptime counts persist in SQLite. Uptime is healthy checks divided by
