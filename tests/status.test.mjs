@@ -37,6 +37,43 @@ test("dashboard sorts outages, recovered outages, unchecked, then healthy with a
   assert.deepEqual(sortDashboardPlatforms([], "status"), []);
 });
 
+test("dashboard sorts by platform SLA in both directions, with alphabetical ties and missing data last", () => {
+  const sample = (good, samples) => ({ good, samples, firstSampleAt: "2026-09-01T00:00:00Z", lastSampleAt: "2026-09-30T00:00:00Z" });
+  const data = [
+    { ...platform([false], [false]), name: "perfect", platformUptime: sample(100, 100) },
+    { ...platform([true], [true]), name: "low", platformUptime: sample(5, 10) },
+    { ...platform([true], [true]), name: "z-tie", platformUptime: sample(995, 1000) },
+    { ...platform([false], [false]), name: "Alpha-tie", platformUptime: sample(199, 200) },
+    { ...platform([true], [true]), name: "zero", platformUptime: sample(0, 100) },
+    { ...platform([], []), name: "z-missing" },
+    { ...platform([], []), name: "a-empty", platformUptime: sample(0, 0) },
+  ];
+  const original = structuredClone(data);
+  assert.deepEqual(sortDashboardPlatforms(data, "sla-ascending").map((item) => item.name), [
+    "zero", "low", "Alpha-tie", "z-tie", "perfect", "a-empty", "z-missing",
+  ]);
+  assert.deepEqual(sortDashboardPlatforms(data, "sla-descending").map((item) => item.name), [
+    "perfect", "Alpha-tie", "z-tie", "low", "zero", "a-empty", "z-missing",
+  ]);
+  assert.deepEqual(data, original);
+  assert.deepEqual(sortDashboardPlatforms([], "sla-ascending"), []);
+  assert.deepEqual(sortDashboardPlatforms([], "sla-descending"), []);
+  // A polling update reorders the cards using the newly received uptime.
+  data[1].platformUptime = sample(100, 100);
+  assert.deepEqual(sortDashboardPlatforms(data, "sla-descending").slice(0, 2).map((item) => item.name), ["low", "perfect"]);
+});
+
+test("SLA sorts use the displayed percentage and platform totals rather than instance uptime", () => {
+  const sample = (good) => ({ good, samples: 100000, firstSampleAt: "2026-09-01T00:00:00Z", lastSampleAt: "2026-09-30T00:00:00Z" });
+  const data = [
+    { ...platform([true], [true]), name: "zulu", platformUptime: sample(99999), uptime: { a: sample(0) } },
+    { ...platform([false], [false]), name: "alpha", platformUptime: sample(99991), uptime: { a: sample(100000) } },
+  ];
+  for (const sort of ["sla-ascending", "sla-descending"]) {
+    assert.deepEqual(sortDashboardPlatforms(data, sort).map((item) => item.name), ["alpha", "zulu"]);
+  }
+});
+
 test("a successful instance keeps the platform green despite a failed instance", () => {
   const data = platform([true], [false]);
   assert.equal(instanceStatus(data, "a"), "healthy");
