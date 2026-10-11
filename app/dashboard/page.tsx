@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [instances, setInstances] = useState([""]);
   const [formError, setFormError] = useState("");
   const [sort, setSort] = useState<DashboardSort>("status");
+  const [platformFilter, setPlatformFilter] = useState("");
 
   const closeDialog = () => {
     setIsDialogOpen(false);
@@ -136,7 +137,11 @@ export default function Dashboard() {
     } finally { setSaving(false); }
   };
 
-  const platforms = sortDashboardPlatforms(createdPlatforms, sort);
+  const filter = platformFilter.trim().toLowerCase();
+  const platforms = sortDashboardPlatforms(
+    createdPlatforms.filter((platform) => platform.name.toLowerCase().includes(filter)),
+    sort,
+  );
 
   return (
     <main className="dashboard-page">
@@ -158,7 +163,24 @@ export default function Dashboard() {
               <h1 id="platforms-heading">Platforms</h1>
               <p>Monitor your deployed sites and their instances.</p>
             </div>
-            <span>{platforms.length} total</span>
+            <span aria-live="polite">
+              {filter ? `${platforms.length} of ${createdPlatforms.length} shown` : `${createdPlatforms.length} total`}
+            </span>
+          </div>
+          <div className="platform-filter">
+            <label htmlFor="platform-filter">Filter by platform name</label>
+            <div className="platform-filter-controls">
+              <input
+                id="platform-filter"
+                type="search"
+                placeholder="Type a platform name…"
+                value={platformFilter}
+                onChange={(event) => setPlatformFilter(event.target.value)}
+              />
+              {platformFilter ? (
+                <button type="button" onClick={() => setPlatformFilter("")}>Clear</button>
+              ) : null}
+            </div>
           </div>
           <div className="platform-sort">
             <label htmlFor="platform-sort">Sort by</label>
@@ -176,6 +198,9 @@ export default function Dashboard() {
             <StatusInfo />
           </div>
           {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {filter && !platforms.length && !error ? (
+            <p className="platform-filter-empty" role="status">No platforms match your search.</p>
+          ) : null}
           <div className="platform-grid" aria-label="Platform status overview">
             {platforms.map((platform) => {
               const days = daysSinceOutage(platform, Date.now());

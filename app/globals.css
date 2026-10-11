@@ -226,6 +226,55 @@ h1 {
   padding-bottom: 3px;
 }
 
+.platform-filter {
+  font-size: 14px;
+  margin: 20px 8px 0 15px;
+}
+
+.platform-filter label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.platform-filter-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.platform-filter input,
+.platform-filter button {
+  background: #202024;
+  border: 1px solid #66666d;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.platform-filter input {
+  flex: 1;
+  min-width: 0;
+}
+
+.platform-filter input::placeholder {
+  color: #a0a0a8;
+}
+
+.platform-filter button {
+  cursor: pointer;
+}
+
+.platform-filter input:focus-visible,
+.platform-filter button:focus-visible {
+  outline: 3px solid #a093ff;
+  outline-offset: 3px;
+}
+
+.platform-filter-empty {
+  color: #a0a0a8;
+  margin: 24px 8px 0 15px;
+}
+
 .platform-sort {
   align-items: center;
   display: flex;

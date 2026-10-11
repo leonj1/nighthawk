@@ -17,14 +17,18 @@ const { code } = await transform(readFileSync(new URL("../app/dashboard/page.tsx
   module: { type: "commonjs" },
 });
 
-function findSelect(node) {
+function findElement(node, predicate) {
   if (!node || typeof node !== "object") return undefined;
-  if (node.type === "select" && node.props.id === "platform-sort") return node;
+  if (predicate(node)) return node;
   const children = React.Children.toArray(node.props?.children);
   for (const child of children) {
-    const select = findSelect(child);
-    if (select) return select;
+    const element = findElement(child, predicate);
+    if (element) return element;
   }
+}
+
+function findSelect(node) {
+  return findElement(node, (element) => element.type === "select" && element.props.id === "platform-sort");
 }
 
 test("dashboard sort menu switches the rendered platform cards between both SLA directions", () => {
@@ -73,4 +77,94 @@ test("dashboard sort menu switches the rendered platform cards between both SLA 
     const ids = [...renderToStaticMarkup(view).matchAll(/href="\/instances\/([^"]+)"/g)].map((match) => match[1]);
     assert.deepEqual(ids, expected);
   }
+});
+
+test("dashboard name filter updates cards as typed, preserves sorting, and clears", () => {
+  let platforms = [
+    { id: "beta", name: "beta.example.com", instances: [] },
+    { id: "alpha", name: "Alpha.example.com", instances: [] },
+    { id: "other", name: "other.test", instances: [] },
+  ];
+  const states = [];
+  let hookIndex = 0;
+  const exports = {};
+  runInNewContext(code, {
+    exports,
+    require(name) {
+      if (name === "react") return {
+        ...React,
+        useEffect: () => {},
+        useState: (initial) => {
+          const index = hookIndex++;
+          if (!(index in states)) states[index] = initial;
+          return [states[index], (value) => { states[index] = value; }];
+        },
+      };
+      if (name === "../lib/status") return status;
+      if (name === "../lib/uptime") return uptime;
+      if (name === "../lib/use-platforms") return { usePlatforms: () => ({ platforms }) };
+      if (name === "../lib/health-url") return {};
+      if (name === "./recent-incidents") return {
+        RecentIncidents: ({ platforms }) => React.createElement("aside", { "data-platform-count": platforms.length }),
+      };
+      if (name === "./status-help") return { StatusLegend: () => null, StatusInfo: () => null };
+      if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
+      return require(name);
+    },
+  });
+  function render() {
+    hookIndex = 0;
+    return exports.default();
+  }
+  function filterInput(view) {
+    return findElement(view, (element) => element.type === "input" && element.props.id === "platform-filter");
+  }
+  function cardIds(view) {
+    return [...renderToStaticMarkup(view).matchAll(/href="\/instances\/([^"]+)"/g)].map((match) => match[1]);
+  }
+  function search(value) {
+    filterInput(render()).props.onChange({ target: { value } });
+    const view = render();
+    assert.equal(filterInput(view).props.value, value);
+    return view;
+  }
+
+  const initial = render();
+  assert.equal(filterInput(initial).props.type, "search");
+  assert.match(renderToStaticMarkup(initial), /<label for="platform-filter">Filter by platform name<\/label>/);
+  assert.deepEqual(cardIds(initial), ["alpha", "beta", "other"]);
+
+  let view = search("  ALPHA.EXAMPLE.COM  ");
+  assert.deepEqual(cardIds(view), ["alpha"]);
+  assert.match(renderToStaticMarkup(view), /1 of 3 shown/);
+  assert.match(renderToStaticMarkup(view), /data-platform-count="3"/);
+
+  view = search("EXAMPLE");
+  findSelect(view).props.onChange({ target: { value: "alphabetical" } });
+  view = render();
+  assert.deepEqual(cardIds(view), ["alpha", "beta"]);
+  assert.equal(findSelect(view).props.value, "alphabetical");
+
+  // A monitoring refresh must keep applying the current filter.
+  platforms = [...platforms, { id: "gamma", name: "gamma.example.com", instances: [] }];
+  assert.deepEqual(cardIds(render()), ["alpha", "beta", "gamma"]);
+
+  view = search("missing");
+  assert.deepEqual(cardIds(view), []);
+  assert.match(renderToStaticMarkup(view), /No platforms match your search\./);
+  assert.match(renderToStaticMarkup(view), /0 of 4 shown/);
+
+  const clear = findElement(view, (element) => element.type === "button" && element.props.children === "Clear");
+  assert.ok(clear);
+  clear.props.onClick();
+  view = render();
+  assert.equal(filterInput(view).props.value, "");
+  assert.deepEqual(cardIds(view), ["alpha", "beta", "gamma", "other"]);
+  assert.doesNotMatch(renderToStaticMarkup(view), /No platforms match/);
+  assert.match(renderToStaticMarkup(view), /4 total/);
+
+  assert.deepEqual(cardIds(search("   ")), ["alpha", "beta", "gamma", "other"]);
+  platforms = [];
+  assert.deepEqual(cardIds(search("example")), []);
+  assert.match(renderToStaticMarkup(render()), /No platforms match your search\./);
 });
