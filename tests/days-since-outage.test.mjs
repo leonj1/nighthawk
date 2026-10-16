@@ -28,7 +28,7 @@ test("durable platform history counts 321 days since recovery outside the check 
 
 test("an ongoing outage always shows zero even when it began days ago", () => {
   const data = platform([state("critical", 12), state("healthy", 100)]);
-  data.checks = { a: [false], b: [false] };
+  data.checks = { a: [false, false, false], b: [false, false, false] };
   assert.equal(daysSinceOutage(data, now), 0);
   // A current total failure also takes precedence over older saved history.
   data.platformStateHistory = [state("healthy", 100)];
@@ -61,8 +61,8 @@ test("partial instance failures do not reset the platform count", () => {
 
 test("legacy aligned checks use the existing total-outage definition", () => {
   const data = platform(undefined);
-  data.checks = { a: [true, false, true], b: [false, false, true] };
-  data.checkTimes = [ago(2), ago(3), ago(4)];
+  data.checks = { a: [true, false, false, false, true], b: [false, false, false, false, true] };
+  data.checkTimes = [ago(2), ago(3), ago(4), ago(5), ago(6)];
   assert.equal(daysSinceOutage(data, now), 2);
 });
 

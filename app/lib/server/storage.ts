@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import type { Platform, InstanceState, PlatformState, UptimeSample } from "../status.ts";
-import { instanceStateHistory, platformStateHistory, platformStatus } from "../status.ts";
+import type { CheckStatus, Platform, InstanceState, PlatformState, UptimeSample } from "../status.ts";
+import { failureThreshold, instanceStateHistory, instanceStatus, platformStateHistory, platformStatus } from "../status.ts";
 import { healthUrl } from "../health-url.ts";
 import { dataDirectory } from "../../../scripts/data-directory.mjs";
 export { dataDirectory } from "../../../scripts/data-directory.mjs";
@@ -26,7 +26,9 @@ CREATE TABLE check_runs (
 ) STRICT;
 CREATE TABLE check_results (
   platform_id TEXT NOT NULL, run_id INTEGER NOT NULL, instance_id TEXT NOT NULL,
-  healthy INTEGER CHECK(healthy IN (0, 1)), PRIMARY KEY(run_id, instance_id),
+  healthy INTEGER CHECK(healthy IN (0, 1)),
+  status TEXT NOT NULL DEFAULT 'unknown' CHECK(status IN ('unknown', 'healthy', 'critical')),
+  PRIMARY KEY(run_id, instance_id),
   FOREIGN KEY(platform_id, run_id) REFERENCES check_runs(platform_id, id) ON DELETE CASCADE,
   FOREIGN KEY(platform_id, instance_id) REFERENCES instances(platform_id, id) ON DELETE CASCADE
 ) STRICT;
@@ -118,7 +120,7 @@ export class PlatformStore {
       this.db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 1000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;");
       this.transaction(() => {
         const version = Number(this.db.prepare("PRAGMA user_version").get()!.user_version);
-        if (version > 2) throw new Error(`Unsupported SQLite schema version ${version}.`);
+        if (version > 3) throw new Error(`Unsupported SQLite schema version ${version}.`);
         if (version === 0) this.db.exec(schema);
         if (version === 1) {
           this.db.exec(bucketSchema);
@@ -129,7 +131,13 @@ export class PlatformStore {
             this.tally(String(run.platform_id), results, String(run.checked_at));
           }
         }
-        if (version < 2) this.db.exec("PRAGMA user_version = 2");
+        if (version > 0 && version < 3) {
+          // Preserve historical decisions made before the failure threshold changed.
+          this.db.exec(`ALTER TABLE check_results ADD COLUMN status TEXT NOT NULL DEFAULT 'unknown'
+            CHECK(status IN ('unknown', 'healthy', 'critical'));
+            UPDATE check_results SET status = CASE healthy WHEN 1 THEN 'healthy' WHEN 0 THEN 'critical' ELSE 'unknown' END;`);
+        }
+        if (version < 3) this.db.exec("PRAGMA user_version = 3");
         if (!this.db.prepare("SELECT 1 FROM metadata WHERE key = 'json_import'").get()) {
           let legacy: unknown = [];
           try { legacy = JSON.parse(readFileSync(path.join(directory, "platforms.json"), "utf8")); }
@@ -198,7 +206,7 @@ export class PlatformStore {
       const results: { id: string; result: boolean | null }[] = [];
       for (const [url, id] of instanceIds) {
         const result = p.checks?.[url]?.[index];
-        this.db.prepare("INSERT INTO check_results VALUES (?, ?, ?, ?)").run(p.id, run, id, result == null ? null : Number(result));
+        this.db.prepare("INSERT INTO check_results VALUES (?, ?, ?, ?, ?)").run(p.id, run, id, result == null ? null : Number(result), instanceStatus(p, url, index));
         results.push({ id, result: result ?? null });
       }
       this.tally(p.id, results, checkedAt);
@@ -223,10 +231,13 @@ export class PlatformStore {
       if (runs.length) {
         p.checkTimes = runs.map((r) => r.checked_at as string | null);
         if (p.checkTimes[0] !== null) p.checkedAt = p.checkTimes[0];
-        p.checks = Object.fromEntries(instances.map((i) => [i.url, runs.map((r) => {
-          const result = this.db.prepare("SELECT healthy FROM check_results WHERE run_id = ? AND instance_id = ?").get(r.id, i.id)!.healthy;
-          return result === null ? null : result === 1;
-        })]));
+        p.checks = {};
+        p.checkStatuses = {};
+        for (const i of instances) {
+          const results = runs.map((r) => this.db.prepare("SELECT healthy, status FROM check_results WHERE run_id = ? AND instance_id = ?").get(r.id, i.id)!);
+          p.checks[String(i.url)] = results.map((r) => r.healthy === null ? null : r.healthy === 1);
+          p.checkStatuses[String(i.url)] = results.map((r) => r.status as CheckStatus);
+        }
       }
       const uptime = Object.fromEntries(instances.flatMap((i) => {
         const sample = this.sample("instance_check_buckets", "instance_id", String(i.id), cutoff);
@@ -277,15 +288,22 @@ export class PlatformStore {
       const instances = this.db.prepare("SELECT id, url FROM instances WHERE platform_id = ? ORDER BY position").all(platformId);
       if (Object.keys(results).length !== instances.length || instances.some((i) => !Object.hasOwn(results, String(i.url)) || (results[String(i.url)] !== null && typeof results[String(i.url)] !== "boolean"))) throw new Error("A cycle must contain exactly one result per instance.");
       const run = this.db.prepare("INSERT INTO check_runs(platform_id, checked_at) VALUES (?, ?)").run(platformId, checkedAt).lastInsertRowid;
+      const p: Platform = { id: platformId, name: "", instances: instances.map((i) => String(i.url)), checkStatuses: {} };
       for (const i of instances) {
         const result = results[String(i.url)];
-        this.db.prepare("INSERT INTO check_results VALUES (?, ?, ?, ?)").run(platformId, run, i.id, result === null ? null : Number(result));
-        const status = result === null ? "unknown" : result ? "healthy" : "warning";
+        // The last three raw results determine current health. Persist that
+        // decision so pruning cannot change the meaning of older cycles.
+        const checks = [result, ...this.db.prepare(`SELECT healthy FROM check_results
+          WHERE instance_id = ? ORDER BY run_id DESC LIMIT ?`).all(i.id, failureThreshold - 1)
+          .map((r) => r.healthy === null ? null : r.healthy === 1)];
+        const confirmed = instanceStatus({ ...p, checks: { [String(i.url)]: checks } }, String(i.url));
+        p.checkStatuses![String(i.url)] = [confirmed];
+        this.db.prepare("INSERT INTO check_results VALUES (?, ?, ?, ?, ?)").run(platformId, run, i.id, result === null ? null : Number(result), confirmed);
+        const status = confirmed === "critical" ? "warning" : confirmed;
         const previous = this.db.prepare("SELECT status FROM instance_state_changes WHERE instance_id = ? ORDER BY id DESC LIMIT 1").get(i.id);
         if (previous?.status !== status) this.db.prepare("INSERT INTO instance_state_changes(instance_id, status, timestamp) VALUES (?, ?, ?)").run(i.id, status, checkedAt);
       }
       this.tally(platformId, instances.map((i) => ({ id: String(i.id), result: results[String(i.url)] })), checkedAt);
-      const p: Platform = { id: platformId, name: "", instances: instances.map((i) => String(i.url)), checks: Object.fromEntries(Object.entries(results).map(([url, value]) => [url, [value]])) };
       const status = platformStatus(p);
       const previous = this.db.prepare("SELECT status FROM platform_state_changes WHERE platform_id = ? ORDER BY id DESC LIMIT 1").get(platformId);
       if (previous?.status !== status) this.db.prepare("INSERT INTO platform_state_changes(platform_id, status, timestamp) VALUES (?, ?, ?)").run(platformId, status, checkedAt);

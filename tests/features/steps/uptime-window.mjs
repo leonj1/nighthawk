@@ -26,6 +26,11 @@ const { code: incidentsCode } = await transform(readFileSync(new URL("../../../a
   jsc: { parser: { syntax: "typescript", tsx: true }, transform: { react: { runtime: "automatic" } } },
   module: { type: "commonjs" },
 });
+const { code: statusHelpCode } = await transform(readFileSync(new URL("../../../app/dashboard/status-help.tsx", import.meta.url), "utf8"), {
+  filename: "status-help.tsx",
+  jsc: { parser: { syntax: "typescript", tsx: true }, transform: { react: { runtime: "automatic" } } },
+  module: { type: "commonjs" },
+});
 function dashboard(platform, now) {
   const exports = {};
   runInNewContext(code, {
@@ -36,6 +41,11 @@ function dashboard(platform, now) {
       if (name === "../lib/status") return status;
       if (name === "../lib/uptime") return uptime;
       if (name === "../lib/health-url") return health;
+      if (name === "./status-help") {
+        const child = {};
+        runInNewContext(statusHelpCode, { exports: child, require });
+        return child;
+      }
       if (name === "./recent-incidents") {
         const child = {};
         runInNewContext(incidentsCode, { exports: child, require(name) {

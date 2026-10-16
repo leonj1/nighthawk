@@ -31,6 +31,11 @@ Feature: Durable monitoring history
   Scenario: An outage and recovery survive a restart
     When a persisted health check reports "online"
     And a persisted health check reports "offline"
+    And a persisted health check reports "offline"
+    Then the persisted instance boxes are "green, gray"
+    And the persisted platform boxes are "green, gray"
+    When the database connection is closed and reopened
+    And a persisted health check reports "offline"
     Then the persisted instance boxes are "amber, green, gray"
     And the persisted platform boxes are "red, green, gray"
     When a persisted health check reports "online"
@@ -40,7 +45,11 @@ Feature: Durable monitoring history
     And the persisted instance boxes are "green, amber, green, gray"
     And the persisted platform boxes are "green, red, green, gray"
 
-  Scenario: A failed first check is preserved without extra boxes on repeated failures
+  Scenario: Three initial failures confirm an outage without extra boxes on repeated failures
+    When a persisted health check reports "offline"
+    And a persisted health check reports "offline"
+    Then the persisted instance boxes are "gray"
+    And the persisted platform boxes are "gray"
     When a persisted health check reports "offline"
     And a persisted health check reports "offline"
     And the database connection is closed and reopened

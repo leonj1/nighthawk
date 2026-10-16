@@ -6,7 +6,8 @@ import { execFileSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { PlatformStore, dataDirectory } from "../app/lib/server/storage.ts";
 import { Monitor, validatePlatform } from "../app/lib/server/monitor.ts";
-import { dashboardStatus, platformStatus } from "../app/lib/status.ts";
+import { dashboardStatus, instanceStatus, platformStatus } from "../app/lib/status.ts";
+import { recentIncidents } from "../app/lib/incidents.ts";
 
 const url = "https://example.com/";
 const second = "https://other.example.com/";
@@ -70,12 +71,12 @@ test("instance and platform deletion are atomic and cascade through monitoring d
 test("history survives a separate process, deduplicates repeated results and keeps three aligned cycles", (t) => {
   const f = fixture(t); const store = f.open(); store.add([platform()]);
   const initial = store.list()[0].createdAt;
-  for (const [i, result] of [true, true, false, false, true, true].entries()) cycle(store, { [url]: result }, i * 10);
+  for (const [i, result] of [true, false, false, false, true, true].entries()) cycle(store, { [url]: result }, i * 10);
   const p = store.list()[0];
   assert.deepEqual(p.checks[url], [true, true, false]);
   assert.deepEqual(p.checkTimes, [time(50), time(40), time(30)]);
   assert.deepEqual(p.stateHistory[url], [
-    { status: "healthy", timestamp: time(40) }, { status: "warning", timestamp: time(20) },
+    { status: "healthy", timestamp: time(40) }, { status: "warning", timestamp: time(30) },
     { status: "healthy", timestamp: time(0) }, { status: "unknown", timestamp: initial },
   ]);
   assert.deepEqual(p.platformStateHistory.map((s) => s.status), ["healthy", "critical", "healthy", "unknown"]);
@@ -91,7 +92,7 @@ test("history survives a separate process, deduplicates repeated results and kee
 test("mixed results, empty platforms, unknowns and dashboard recovery retain aggregation semantics", (t) => {
   const empty = { id: "empty", name: "empty", instances: [] };
   const f = fixture(t, [empty]); const store = f.open(); store.add([platform("p", [url, second])]);
-  const cases = [[true, false, "healthy"], [true, null, "healthy"], [false, null, "unknown"], [null, null, "unknown"], [false, false, "critical"], [true, false, "healthy"]];
+  const cases = [[true, false, "healthy"], [true, null, "healthy"], [false, null, "healthy"], [null, null, "unknown"], [false, false, "unknown"], [false, false, "unknown"], [false, false, "critical"], [true, false, "healthy"]];
   for (const [a, b, expected] of cases) {
     cycle(store, { [url]: a, [second]: b });
     const p = store.list().find((p) => p.id === "p");
@@ -109,10 +110,78 @@ test("mixed results, empty platforms, unknowns and dashboard recovery retain agg
 
 test("failed first checks and identical timestamps preserve transition order", (t) => {
   const f = fixture(t); const store = f.open(); store.add([platform()]);
-  for (const result of [false, true, false, true]) cycle(store, { [url]: result });
+  for (const result of [false, false, false, true, false, false, false, true]) cycle(store, { [url]: result });
   const p = f.reopen().list()[0];
   assert.deepEqual(p.stateHistory[url].map((s) => s.status), ["healthy", "warning", "healthy", "warning", "unknown"]);
   assert.deepEqual(p.platformStateHistory.map((s) => s.status), ["healthy", "critical", "healthy", "critical", "unknown"]);
+});
+
+test("failure threshold survives restart and retention, then one success immediately closes the incident", (t) => {
+  const f = fixture(t); let store = f.open(); store.add([platform()]);
+  cycle(store, { [url]: true }, 0);
+  for (let i = 1; i <= 2; i++) {
+    cycle(store, { [url]: false }, i * 10);
+    const p = store.list()[0];
+    assert.equal(instanceStatus(p, url), "healthy");
+    assert.equal(platformStatus(p), "healthy");
+    assert.deepEqual(recentIncidents([p]), []);
+    assert.equal(p.stateHistory[url][0].timestamp, time(0));
+    store = f.reopen();
+  }
+  cycle(store, { [url]: false }, 30);
+  assert.equal(platformStatus(store.list()[0]), "critical");
+  assert.equal(recentIncidents(store.list())[0].startedAt, time(30));
+  for (let i = 4; i <= 8; i++) cycle(store, { [url]: false }, i * 10);
+  assert.deepEqual(store.list()[0].stateHistory[url].map((s) => s.status), ["warning", "healthy", "unknown"]);
+  assert.equal(recentIncidents(store.list())[0].startedAt, time(30));
+  cycle(store, { [url]: true }, 90);
+  store = f.reopen();
+  const p = store.list()[0];
+  assert.equal(platformStatus(p), "healthy");
+  assert.equal(dashboardStatus(p), "warning");
+  assert.deepEqual(p.checks[url], [true, false, false]);
+  assert.deepEqual(p.checkStatuses[url], ["healthy", "critical", "critical"]);
+  assert.equal(recentIncidents([p])[0].recoveredAt, time(90));
+  // Read at the injected cycle clock so the 30-day raw uptime window includes it.
+  const sample = store.list(time(90))[0].uptime[url];
+  assert.equal(sample.good, 2);
+  assert.equal(sample.samples, 10);
+});
+
+test("successes and unknown results break failure streaks independently for each instance", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform("p", [url, second])]);
+  for (const [a, b] of [[false, true], [false, false], [true, false], [false, false]]) {
+    cycle(store, { [url]: a, [second]: b });
+  }
+  let p = store.list()[0];
+  assert.equal(instanceStatus(p, url), "healthy");
+  assert.equal(instanceStatus(p, second), "critical");
+  assert.equal(platformStatus(p), "healthy");
+  cycle(store, { [url]: false, [second]: false });
+  cycle(store, { [url]: null, [second]: false });
+  for (let i = 0; i < 2; i++) {
+    cycle(store, { [url]: false, [second]: false });
+    p = store.list()[0];
+    assert.equal(instanceStatus(p, url), "unknown");
+    assert.equal(platformStatus(p), "unknown");
+  }
+  cycle(store, { [url]: false, [second]: false });
+  assert.equal(platformStatus(store.list()[0]), "critical");
+});
+
+test("failed writes and stale cycles do not advance the consecutive failure count", (t) => {
+  const f = fixture(t); const store = f.open(); store.add([platform()]);
+  cycle(store, { [url]: true });
+  cycle(store, { [url]: false });
+  const db = f.raw();
+  db.exec("CREATE TRIGGER fail_threshold BEFORE UPDATE ON platforms BEGIN SELECT RAISE(ABORT, 'disk failure'); END");
+  assert.throws(() => cycle(store, { [url]: false }), /disk failure/);
+  db.exec("DROP TRIGGER fail_threshold");
+  assert.equal(store.recordCycle("p", { [url]: false }, time(10), 0), false);
+  cycle(store, { [url]: false });
+  assert.equal(platformStatus(store.list()[0]), "healthy");
+  cycle(store, { [url]: false });
+  assert.equal(platformStatus(store.list()[0]), "critical");
 });
 
 test("platform creation and batch imports roll back completely on a mid-write failure", (t) => {
@@ -135,7 +204,7 @@ test("check cycles roll back results, transitions, revision and pruning; concurr
   db.exec("DROP TRIGGER fail_cycle; BEGIN IMMEDIATE; UPDATE platforms SET name = 'uncommitted'");
   assert.deepEqual(store.list(), before);
   db.exec("ROLLBACK");
-  cycle(store, { [url]: false }); assert.equal(store.list()[0].stateHistory[url][0].status, "warning");
+  cycle(store, { [url]: false }); assert.equal(store.list()[0].stateHistory[url][0].status, "healthy");
 });
 
 test("stale cycles, retries, malformed results and missing platforms cannot change persisted state", (t) => {
@@ -156,8 +225,8 @@ test("foreign keys reject missing parents and cross-platform check results", (t)
   cycle(store, { [url]: true });
   const run = db.prepare("SELECT id FROM check_runs").get().id;
   const other = db.prepare("SELECT id FROM instances WHERE platform_id = 'other'").get().id;
-  assert.throws(() => db.prepare("INSERT INTO check_results VALUES ('p', ?, ?, 1)").run(run, other), /FOREIGN KEY/);
-  assert.throws(() => db.prepare("INSERT INTO check_results VALUES ('p', 9999, ?, 1)").run(other), /FOREIGN KEY/);
+  assert.throws(() => db.prepare("INSERT INTO check_results(platform_id, run_id, instance_id, healthy) VALUES ('p', ?, ?, 1)").run(run, other), /FOREIGN KEY/);
+  assert.throws(() => db.prepare("INSERT INTO check_results(platform_id, run_id, instance_id, healthy) VALUES ('p', 9999, ?, 1)").run(other), /FOREIGN KEY/);
 });
 
 test("platform limit rejects an entire batch without acknowledging partial writes", (t) => {
@@ -169,6 +238,7 @@ test("platform limit rejects an entire batch without acknowledging partial write
 test("current JSON migration preserves every retained value, is one-time, and leaves the source intact", (t) => {
   const p = platform();
   p.checkedAt = time(20); p.checkTimes = [time(20), time(10), null]; p.checks = { [url]: [true, false, null] };
+  p.checkStatuses = { [url]: ["healthy", "unknown", "unknown"] };
   p.stateHistory[url].unshift({ status: "healthy", timestamp: time(20) }, { status: "warning", timestamp: time(10) });
   p.platformStateHistory.unshift({ status: "healthy", timestamp: time(20) }, { status: "critical", timestamp: time(10) });
   const f = fixture(t, [p]); let store = f.open();
@@ -177,7 +247,7 @@ test("current JSON migration preserves every retained value, is one-time, and le
   cycle(store, { [url]: false }, 30); const expected = store.list();
   writeFileSync(path.join(f.directory, "platforms.json"), "invalid after migration");
   store = f.reopen(); assert.deepEqual(store.list(), expected);
-  assert.equal(f.raw().prepare("PRAGMA user_version").get().user_version, 2);
+  assert.equal(f.raw().prepare("PRAGMA user_version").get().user_version, 3);
 });
 
 test("older JSON reconstructs history, defaults endpoints and preserves missing timestamps and URL keys", (t) => {
@@ -187,8 +257,8 @@ test("older JSON reconstructs history, defaults endpoints and preserves missing 
   assert.deepEqual(migrated.instances, [oldUrl]);
   assert.equal(migrated.healthUrls[oldUrl], url);
   assert.deepEqual(migrated.checkTimes, [time(20), null, null]);
-  assert.deepEqual(migrated.stateHistory[oldUrl], [{ status: "healthy", timestamp: time(20) }, { status: "warning", timestamp: null }, { status: "unknown", timestamp: null }]);
-  assert.deepEqual(migrated.platformStateHistory.map((s) => s.status), ["healthy", "critical", "unknown"]);
+  assert.deepEqual(migrated.stateHistory[oldUrl], [{ status: "healthy", timestamp: time(20) }, { status: "unknown", timestamp: null }]);
+  assert.deepEqual(migrated.platformStateHistory.map((s) => s.status), ["healthy", "unknown"]);
   assert.deepEqual(f.reopen().list()[0], migrated);
 });
 
@@ -215,7 +285,7 @@ test("interrupted import rolls back; existing schema upgrades reopen and future 
   const expected = store.list(); const db = f.raw();
   db.exec("BEGIN IMMEDIATE; DELETE FROM metadata; DELETE FROM platforms; ROLLBACK");
   assert.deepEqual(f.reopen().list(), expected);
-  db.exec("PRAGMA user_version = 3");
+  db.exec("PRAGMA user_version = 4");
   assert.throws(() => new PlatformStore(f.directory), /Unsupported SQLite schema/);
   assert.deepEqual(f.raw().prepare("SELECT name FROM platforms").all().map((p) => p.name), ["p"]);
 });
@@ -276,7 +346,11 @@ test("monitor timeouts persist failed checks and abort pending requests", async 
   const monitor = new Monitor(store, (_url, s) => { signal = s; return new Promise(() => {}); }, () => time(10), 5);
   await monitor.tick(); assert.equal(signal.aborted, true);
   assert.deepEqual(store.list()[0].checks[url], [false]);
-  assert.deepEqual(store.list()[0].stateHistory[url].map((s) => s.status), ["warning", "unknown"]);
+  assert.deepEqual(store.list()[0].stateHistory[url].map((s) => s.status), ["unknown"]);
+  await monitor.tick();
+  assert.equal(platformStatus(store.list()[0]), "unknown");
+  await monitor.tick();
+  assert.equal(platformStatus(store.list()[0]), "critical");
 });
 
 
@@ -395,12 +469,30 @@ test("v1 migration backfills only retained runs and rejects future schema", (t) 
   const f = fixture(t); const store = f.open(); store.add([platform()]);
   [true, false, true, true].forEach((r, i) => cycle(store, { [url]: r }, i * 10));
   const db = f.raw();
-  db.exec("DROP TABLE instance_check_buckets; DROP TABLE platform_check_buckets; PRAGMA user_version = 1");
+  db.exec("ALTER TABLE check_results DROP COLUMN status; DROP TABLE instance_check_buckets; DROP TABLE platform_check_buckets; PRAGMA user_version = 1");
   const upgraded = f.reopen();
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 2);
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
   assert.deepEqual(upgraded.list(dayAt(1))[0].uptime[url], { good: 2, samples: 3, firstSampleAt: time(10), lastSampleAt: time(30) });
-  db.exec("PRAGMA user_version = 3");
+  db.exec("PRAGMA user_version = 4");
   assert.throws(() => new PlatformStore(f.directory), /Unsupported SQLite schema/);
+});
+
+test("v2 migration preserves old outage decisions and raw data while new cycles require three failures", (t) => {
+  const f = fixture(t); let store = f.open(); store.add([platform()]);
+  [true, false, false, false, true].forEach((r, i) => cycle(store, { [url]: r }, i * 10));
+  const before = store.list(time(40))[0];
+  const db = f.raw();
+  db.exec("ALTER TABLE check_results DROP COLUMN status; PRAGMA user_version = 2");
+  store = f.reopen();
+  const migrated = store.list(time(40))[0];
+  assert.deepEqual(migrated, { ...before, checkStatuses: { [url]: ["healthy", "critical", "critical"] } });
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
+  for (let i = 1; i <= 3; i++) {
+    cycle(store, { [url]: false }, 40 + i * 10);
+    assert.equal(platformStatus(store.list()[0]), i < 3 ? "healthy" : "critical");
+  }
+  const expected = store.list();
+  assert.deepEqual(f.reopen().list(), expected);
 });
 
 test("stale and failed cycles never change rollups; invalid read clocks fail", (t) => {
