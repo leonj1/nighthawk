@@ -13,14 +13,16 @@ Feature: Instance boxes represent state changes
   Scenario: An unchecked instance has only its initial state box
     Then the instance has 1 state boxes
 
-  Scenario Outline: The first completed check determines the current color
+  Scenario Outline: Success or three consecutive failures determine the current color
     When monitoring reports "<result>"
     Then the latest instance box is <color>
 
     Examples:
-      | result  | color |
-      | online  | green |
-      | offline | amber |
+      | result                    | color |
+      | online                    | green |
+      | offline                   | gray  |
+      | offline, offline          | gray  |
+      | offline, offline, offline | amber |
 
   Scenario Outline: Box count follows state changes instead of check count
     When monitoring reports "<results>"
@@ -30,11 +32,14 @@ Feature: Instance boxes represent state changes
     Examples:
       | results                         | count | colors                     |
       | online                          | 2     | green, gray                |
-      | offline                         | 2     | amber, gray                |
+      | offline                         | 1     | gray                       |
       | online, online, online, online  | 2     | green, gray                |
       | offline, offline, offline       | 2     | amber, gray                |
-      | online, offline                 | 3     | amber, green, gray         |
-      | online, offline, online         | 4     | green, amber, green, gray  |
+      | online, offline                 | 2     | green, gray                |
+      | online, offline, offline        | 2     | green, gray                |
+      | online, offline, online         | 2     | green, gray                |
+      | online, offline, offline, offline | 3   | amber, green, gray         |
+      | online, offline, offline, offline, online | 4 | green, amber, green, gray |
 
   Scenario: A newly added platform has one gray summary box
     Then the platform boxes from newest to oldest are "gray"
@@ -47,6 +52,7 @@ Feature: Instance boxes represent state changes
       | results                        | colors                 |
       | online                         | green, gray            |
       | online, online, online, online | green, gray            |
-      | offline                        | red, gray              |
+      | offline                        | gray                   |
       | offline, offline, offline      | red, gray              |
-      | online, offline, online        | green, red, green, gray |
+      | online, offline, online        | green, gray            |
+      | online, offline, offline, offline, online | green, red, green, gray |

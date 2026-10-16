@@ -18,14 +18,17 @@ export type Platform = {
   stateHistory?: Record<string, InstanceState[]>;
   // Newest first. Each index represents the same check window for every instance.
   checks?: Record<string, (boolean | null)[]>;
+  // Confirmed health for each retained cycle, separate from raw probe results.
+  checkStatuses?: Record<string, CheckStatus[]>;
   uptime?: Record<string, UptimeSample>;
   platformUptime?: UptimeSample;
 };
 
 export const storageKey = "nighthawk-platforms";
 export const checkHistoryIndices = [0, 1, 2];
+export const failureThreshold = 3;
 
-// State transitions are independent per instance; raw checks remain aligned
+// State transitions are independent per instance; confirmed checks remain aligned
 // across instances for the dashboard's total-outage calculation.
 export function instanceStateHistory(platform: Platform, instance: string): InstanceState[] {
   const saved = platform.stateHistory?.[instance];
@@ -33,7 +36,8 @@ export function instanceStateHistory(platform: Platform, instance: string): Inst
   const history: InstanceState[] = [{ status: "unknown", timestamp: platform.createdAt ?? null }];
   const checks = platform.checks?.[instance] ?? [];
   for (let index = checks.length - 1; index >= 0; index--) {
-    const status = checks[index] === true ? "healthy" : checks[index] === false ? "warning" : "unknown";
+    const health = instanceStatus(platform, instance, index);
+    const status = health === "critical" ? "warning" : health;
     if (history[0].status !== status) {
       history.unshift({ status, timestamp: platform.checkTimes?.[index] ?? (index === 0 ? platform.checkedAt ?? null : null) });
     }
@@ -42,8 +46,21 @@ export function instanceStateHistory(platform: Platform, instance: string): Inst
 }
 
 export function instanceStatus(platform: Platform, instance: string, index = 0): CheckStatus {
-  const result = platform.checks?.[instance]?.[index];
-  return result === true ? "healthy" : result === false ? "critical" : "unknown";
+  const saved = platform.checkStatuses?.[instance]?.[index];
+  if (saved) return saved;
+  const checks = platform.checks?.[instance] ?? [];
+  if (index < 0 || index >= checks.length) return "unknown";
+  let status: CheckStatus = "unknown";
+  let failures = 0;
+  for (let i = checks.length - 1; i >= index; i--) {
+    if (checks[i] === false) {
+      if (++failures >= failureThreshold) status = "critical";
+    } else {
+      failures = 0;
+      status = checks[i] === true ? "healthy" : "unknown";
+    }
+  }
+  return status;
 }
 
 export function platformStatus(platform: Platform, index = 0): CheckStatus {
@@ -121,7 +138,7 @@ export function sortDashboardPlatforms(platforms: readonly Platform[], sort: Das
 }
 
 export const statusLabels: Record<DashboardStatus, string> = {
-  healthy: "Successful health check",
+  healthy: "Healthy (fewer than three consecutive failed checks)",
   critical: "Offline",
   warning: "All instances were offline during the displayed window; now recovered",
   unknown: "No conclusive health check",
@@ -130,7 +147,7 @@ export const statusLabels: Record<DashboardStatus, string> = {
 // Sample health checks keep the dashboard and detail views consistent.
 export const defaultPlatforms: Platform[] = Array.from({ length: 15 }, (_, index) => {
   const instances = [`https://a.platform-${index + 1}.example.com`, `https://b.platform-${index + 1}.example.com`];
-  const history = index === 0 ? [false, false, true] : index < 3 ? [true, false, true] : [true, true, true];
+  const history = index === 0 ? [false, false, false] : index < 3 ? [true, false, false, false] : [true, true, true];
   return {
     id: `platform-${index + 1}`,
     name: `Platform ${index + 1}`,

@@ -23,9 +23,9 @@ test("dashboard sorts outages, recovered outages, unchecked, then healthy with a
   const data = [
     { ...platform([true], [true]), name: "healthy" },
     { ...platform([], []), name: "unchecked" },
-    { ...platform([true, false], [true, false]), name: "recovered" },
-    { ...platform([false], [false]), name: "z-outage" },
-    { ...platform([false], [false]), name: "a-outage" },
+    { ...platform([true, false, false, false], [true, false, false, false]), name: "recovered" },
+    { ...platform([false, false, false], [false, false, false]), name: "z-outage" },
+    { ...platform([false, false, false], [false, false, false]), name: "a-outage" },
   ];
   assert.deepEqual(sortDashboardPlatforms(data, "status").map((item) => item.name), [
     "a-outage", "z-outage", "recovered", "unchecked", "healthy",
@@ -75,7 +75,7 @@ test("SLA sorts use the displayed percentage and platform totals rather than ins
 });
 
 test("a successful instance keeps the platform green despite a failed instance", () => {
-  const data = platform([true], [false]);
+  const data = platform([true], [false, false, false]);
   assert.equal(instanceStatus(data, "a"), "healthy");
   assert.equal(instanceStatus(data, "b"), "critical");
   assert.equal(platformStatus(data), "healthy");
@@ -83,13 +83,13 @@ test("a successful instance keeps the platform green despite a failed instance",
 });
 
 test("all instances offline now takes precedence over window history", () => {
-  const data = platform([false, false, true], [false, false, true]);
+  const data = platform([false, false, false, true], [false, false, false, true]);
   assert.equal(platformStatus(data), "critical");
   assert.equal(dashboardStatus(data), "critical");
 });
 
 test("a recovered total outage is amber only on the dashboard", () => {
-  const data = platform([true, false, true], [true, false, true]);
+  const data = platform([true, false, false, false, true], [true, false, false, false, true]);
   assert.equal(dashboardStatus(data), "warning");
   assert.equal(platformStatus(data), "healthy");
   assert.equal(platformStatus(data, 1), "critical");
@@ -119,16 +119,35 @@ test("sample dashboard colors are derived from the same checks as details", () =
 });
 
 test("platform transitions collapse repeated aggregate results across instances", () => {
-  const data = platform([true, false, false, true], [false, true, false, false]);
+  const data = platform([true, false, false, false, false, true], [false, true, false, false, false, false]);
   data.createdAt = "2026-09-30T00:00:00.000Z";
-  data.checkTimes = [4, 3, 2, 1].map((second) => `2026-09-30T00:00:0${second}.000Z`);
+  data.checkTimes = [6, 5, 4, 3, 2, 1].map((second) => `2026-09-30T00:00:0${second}.000Z`);
   assert.deepEqual(platformStateHistory(data), [
     { status: "healthy", timestamp: data.checkTimes[1] },
     { status: "critical", timestamp: data.checkTimes[2] },
-    { status: "healthy", timestamp: data.checkTimes[3] },
+    { status: "healthy", timestamp: data.checkTimes[5] },
     { status: "unknown", timestamp: data.createdAt },
   ]);
   data.platformStateHistory = platformStateHistory(data);
   data.checks = { a: [true, true, true], b: [false, false, false] };
   assert.deepEqual(platformStateHistory(data), data.platformStateHistory);
+});
+
+test("three consecutive failures are required, while one success resets health and the streak", () => {
+  for (const checks of [[false], [false, false]]) {
+    assert.equal(instanceStatus(platform(checks, []), "a"), "unknown");
+    assert.equal(instanceStatus(platform([...checks, true], []), "a"), "healthy");
+  }
+  assert.equal(instanceStatus(platform([false, false, false, true], []), "a"), "critical");
+  assert.equal(instanceStatus(platform([true, false, false, false], []), "a"), "healthy");
+  assert.equal(instanceStatus(platform([false, false, true, false, false], []), "a"), "healthy");
+  assert.equal(instanceStatus(platform([false, false, null, false, false], []), "a"), "unknown");
+});
+
+test("saved confirmed checks preserve historical status when earlier raw checks are pruned", () => {
+  const data = platform([true, false, false], [true, false, false]);
+  data.checkStatuses = { a: ["healthy", "critical", "healthy"], b: ["healthy", "critical", "healthy"] };
+  assert.equal(instanceStatus(data, "a", 1), "critical");
+  assert.equal(platformStatus(data, 1), "critical");
+  assert.equal(dashboardStatus(data), "warning");
 });

@@ -27,12 +27,13 @@ export function renderView(platform, now) {
   runInNewContext(compiled, {
     exports,
     require(name) {
-      if (name === "react" && now !== undefined) return { ...React, useState: () => [now, () => {}] };
+      if (name === "react" && now !== undefined) return { ...React, useState: (initial) => [initial === null ? now : initial, () => {}] };
       if (name === "../lib/use-platforms") return { usePlatforms: () => ({ platforms: [platform] }) };
       if (name === "../lib/status") return status;
       if (name === "../lib/check-time") return checkTime;
       if (name === "../lib/uptime") return uptime;
       if (name === "next/link") return ({ children, ...props }) => React.createElement("a", props, children);
+      if (name === "next/navigation") return { useRouter: () => ({ push() {} }) };
       return require(name);
     },
   });

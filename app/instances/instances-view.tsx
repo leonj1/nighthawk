@@ -111,7 +111,7 @@ export default function InstancesView({ platformId }: InstancesViewProps) {
         <button className="delete-platform-button" disabled={!platform.id || deletingPlatform} onClick={() => void removePlatform()} type="button">
           {deletingPlatform ? "Deleting…" : "Delete platform"}
         </button>
-        <p className="status-legend">Green: successful check · Amber: instance offline · Red: platform offline · Gray: unchecked</p>
+        <p className="status-legend">Green: healthy · Amber: instance offline · Red: platform offline · Gray: unchecked</p>
         <p className="status-note">Checked every 10 seconds{platform.checkedAt ? ` · Last checked ${new Date(platform.checkedAt).toLocaleTimeString()}` : " · Awaiting first check"}</p>
         <p className={`platform-uptime platform-uptime--${platformUptime.meetsTarget === null ? "none" : platformUptime.meetsTarget ? "ok" : "below"}`}>{platformUptime.label} {platformUptime.coverage}{platformUptime.provisional ? " · provisional" : ""}</p>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
