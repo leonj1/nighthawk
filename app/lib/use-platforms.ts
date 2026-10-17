@@ -43,7 +43,7 @@ export function usePlatforms() {
       finally { busy = false; }
     }
     void refresh();
-    const timer = setInterval(() => { void refresh(); }, 10_000);
+    const timer = setInterval(() => { void refresh(); }, 2_000);
     return () => { active = false; clearInterval(timer); };
   }, []);
   return { platforms, setPlatforms, error };

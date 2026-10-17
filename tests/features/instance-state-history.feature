@@ -13,7 +13,7 @@ Feature: Instance boxes represent state changes
   Scenario: An unchecked instance has only its initial state box
     Then the instance has 1 state boxes
 
-  Scenario Outline: Success or three consecutive failures determine the current color
+  Scenario Outline: Success or two consecutive failures determine the current color
     When monitoring reports "<result>"
     Then the latest instance box is <color>
 
@@ -21,7 +21,7 @@ Feature: Instance boxes represent state changes
       | result                    | color |
       | online                    | green |
       | offline                   | gray  |
-      | offline, offline          | gray  |
+      | offline, offline          | amber |
       | offline, offline, offline | amber |
 
   Scenario Outline: Box count follows state changes instead of check count
@@ -36,7 +36,7 @@ Feature: Instance boxes represent state changes
       | online, online, online, online  | 2     | green, gray                |
       | offline, offline, offline       | 2     | amber, gray                |
       | online, offline                 | 2     | green, gray                |
-      | online, offline, offline        | 2     | green, gray                |
+      | online, offline, offline        | 3     | amber, green, gray         |
       | online, offline, online         | 2     | green, gray                |
       | online, offline, offline, offline | 3   | amber, green, gray         |
       | online, offline, offline, offline, online | 4 | green, amber, green, gray |

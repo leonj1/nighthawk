@@ -107,7 +107,7 @@ export function RecentIncidents({ platforms, error }: { platforms: Platform[]; e
   return (
     <section className="recent-incidents" aria-labelledby="recent-incidents-heading">
       <h2 id="recent-incidents-heading">Recent incidents</h2>
-      <p className="status-note">Latest 10 instance outages, grouped by local day, newest failure or recovery first. Squares show current instance health; durations run from the third consecutive failed check to confirmed recovery.</p>
+      <p className="status-note">Latest 10 instance outages, grouped by local day, newest failure or recovery first. Squares show current instance health; durations run from the second consecutive failed check to confirmed recovery.</p>
       {error ? <p className="status-note">Incident history may be out of date while monitoring results are unavailable.</p> : null}
       {incidents.length ? <IncidentTable days={days} now={now} /> : (
         <p className="incident-empty">{error ? "Unable to load incident history." : "No incidents in the available history."}</p>

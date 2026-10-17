@@ -3,7 +3,7 @@ import { healthUrl } from "../health-url.ts";
 import { probe } from "./probe.ts";
 import { PlatformStore } from "./storage.ts";
 
-const interval = 10_000;
+const interval = 2_000;
 
 export class Monitor {
   private running = false;

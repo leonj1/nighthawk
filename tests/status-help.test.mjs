@@ -8,7 +8,7 @@ const help = readFileSync(new URL("../app/dashboard/status-help.tsx", import.met
 test("dashboard renders the legend and info icon instead of the explanatory paragraphs", () => {
   assert.match(dashboard, /<StatusLegend \/>\s*<StatusInfo \/>\s*<\/div>/);
   assert.doesNotMatch(dashboard, /status-note/);
-  assert.doesNotMatch(dashboard, /Health checks run every 10 seconds/);
+  assert.doesNotMatch(dashboard, /Health checks run every 2 seconds/);
 });
 
 test("legend shows a swatch for each status in severity order", () => {
@@ -19,8 +19,8 @@ test("legend shows a swatch for each status in severity order", () => {
 
 test("info popover carries the check interval and uptime definitions", () => {
   assert.match(help, /aria-expanded=\{open\}/);
-  assert.match(help, /Health checks run every 10 seconds\. HTTP 2xx responses are healthy\./);
-  assert.match(help, /three consecutive failed checks and recovers after one successful check/);
+  assert.match(help, /Health checks run every 2 seconds\. HTTP 2xx responses are healthy\./);
+  assert.match(help, /two consecutive failed checks and recovers after one successful check/);
   assert.match(help, /Uptime is the share of checks that succeeded in the last 30 days\. Unknown results are not counted\./);
   assert.match(help, /event\.key === "Escape"/);
 });

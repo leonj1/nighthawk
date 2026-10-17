@@ -26,7 +26,7 @@ export type Platform = {
 
 export const storageKey = "nighthawk-platforms";
 export const checkHistoryIndices = [0, 1, 2];
-export const failureThreshold = 3;
+export const failureThreshold = 2;
 
 // State transitions are independent per instance; confirmed checks remain aligned
 // across instances for the dashboard's total-outage calculation.
@@ -138,7 +138,7 @@ export function sortDashboardPlatforms(platforms: readonly Platform[], sort: Das
 }
 
 export const statusLabels: Record<DashboardStatus, string> = {
-  healthy: "Healthy (fewer than three consecutive failed checks)",
+  healthy: "Healthy (fewer than two consecutive failed checks)",
   critical: "Offline",
   warning: "All instances were offline during the displayed window; now recovered",
   unknown: "No conclusive health check",

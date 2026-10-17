@@ -124,7 +124,7 @@ test("platform transitions collapse repeated aggregate results across instances"
   data.checkTimes = [6, 5, 4, 3, 2, 1].map((second) => `2026-09-30T00:00:0${second}.000Z`);
   assert.deepEqual(platformStateHistory(data), [
     { status: "healthy", timestamp: data.checkTimes[1] },
-    { status: "critical", timestamp: data.checkTimes[2] },
+    { status: "critical", timestamp: data.checkTimes[3] },
     { status: "healthy", timestamp: data.checkTimes[5] },
     { status: "unknown", timestamp: data.createdAt },
   ]);
@@ -133,15 +133,14 @@ test("platform transitions collapse repeated aggregate results across instances"
   assert.deepEqual(platformStateHistory(data), data.platformStateHistory);
 });
 
-test("three consecutive failures are required, while one success resets health and the streak", () => {
-  for (const checks of [[false], [false, false]]) {
-    assert.equal(instanceStatus(platform(checks, []), "a"), "unknown");
-    assert.equal(instanceStatus(platform([...checks, true], []), "a"), "healthy");
-  }
-  assert.equal(instanceStatus(platform([false, false, false, true], []), "a"), "critical");
-  assert.equal(instanceStatus(platform([true, false, false, false], []), "a"), "healthy");
-  assert.equal(instanceStatus(platform([false, false, true, false, false], []), "a"), "healthy");
-  assert.equal(instanceStatus(platform([false, false, null, false, false], []), "a"), "unknown");
+test("two consecutive failures are required, while one success resets health and the streak", () => {
+  assert.equal(instanceStatus(platform([false], []), "a"), "unknown");
+  assert.equal(instanceStatus(platform([false, true], []), "a"), "healthy");
+  assert.equal(instanceStatus(platform([false, false], []), "a"), "critical");
+  assert.equal(instanceStatus(platform([false, false, true], []), "a"), "critical");
+  assert.equal(instanceStatus(platform([true, false, false], []), "a"), "healthy");
+  assert.equal(instanceStatus(platform([false, true, false], []), "a"), "healthy");
+  assert.equal(instanceStatus(platform([false, null, false], []), "a"), "unknown");
 });
 
 test("saved confirmed checks preserve historical status when earlier raw checks are pruned", () => {

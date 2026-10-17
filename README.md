@@ -1,14 +1,14 @@
 # Nighthawk
 
-Nighthawk checks configured HTTP(S) health endpoints every 10 seconds while the
+Nighthawk checks configured HTTP(S) health endpoints every 2 seconds while the
 Node server is running. Instances begin with one gray box, then gain a green
 (success) or amber (failure) box only when their state changes. Platform detail
 history uses gray, green, and red for unknown, available, and fully offline.
-An instance goes offline after three consecutive failed checks and recovers on
-one successful check. One or two failures keep a previously healthy instance
-online; a new instance stays unknown until its first success or third consecutive
+An instance goes offline after two consecutive failed checks and recovers on
+one successful check. One failure keeps a previously healthy instance
+online; a new instance stays unknown until its first success or second consecutive
 failure. Unknown results interrupt the failure streak. Outage durations start
-at the third failed check. Uptime percentages still count every raw probe result.
+at the second failed check. Uptime percentages still count every raw probe result.
 The dashboard uses amber when a currently available platform had a total outage
 within the latest three check cycles.
 Each dashboard box shows only the number of full days since the most recent

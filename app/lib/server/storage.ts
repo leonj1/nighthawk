@@ -291,7 +291,7 @@ export class PlatformStore {
       const p: Platform = { id: platformId, name: "", instances: instances.map((i) => String(i.url)), checkStatuses: {} };
       for (const i of instances) {
         const result = results[String(i.url)];
-        // The last three raw results determine current health. Persist that
+        // The latest failureThreshold raw results determine current health. Persist that
         // decision so pruning cannot change the meaning of older cycles.
         const checks = [result, ...this.db.prepare(`SELECT healthy FROM check_results
           WHERE instance_id = ? ORDER BY run_id DESC LIMIT ?`).all(i.id, failureThreshold - 1)
