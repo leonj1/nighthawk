@@ -76,7 +76,7 @@ test("history survives a separate process, deduplicates repeated results and kee
   assert.deepEqual(p.checks[url], [true, true, false]);
   assert.deepEqual(p.checkTimes, [time(50), time(40), time(30)]);
   assert.deepEqual(p.stateHistory[url], [
-    { status: "healthy", timestamp: time(40) }, { status: "warning", timestamp: time(30) },
+    { status: "healthy", timestamp: time(40) }, { status: "warning", timestamp: time(20) },
     { status: "healthy", timestamp: time(0) }, { status: "unknown", timestamp: initial },
   ]);
   assert.deepEqual(p.platformStateHistory.map((s) => s.status), ["healthy", "critical", "healthy", "unknown"]);
@@ -92,7 +92,7 @@ test("history survives a separate process, deduplicates repeated results and kee
 test("mixed results, empty platforms, unknowns and dashboard recovery retain aggregation semantics", (t) => {
   const empty = { id: "empty", name: "empty", instances: [] };
   const f = fixture(t, [empty]); const store = f.open(); store.add([platform("p", [url, second])]);
-  const cases = [[true, false, "healthy"], [true, null, "healthy"], [false, null, "healthy"], [null, null, "unknown"], [false, false, "unknown"], [false, false, "unknown"], [false, false, "critical"], [true, false, "healthy"]];
+  const cases = [[true, false, "healthy"], [true, null, "healthy"], [false, null, "healthy"], [null, null, "unknown"], [false, false, "unknown"], [false, false, "critical"], [false, false, "critical"], [true, false, "healthy"]];
   for (const [a, b, expected] of cases) {
     cycle(store, { [url]: a, [second]: b });
     const p = store.list().find((p) => p.id === "p");
@@ -119,21 +119,19 @@ test("failed first checks and identical timestamps preserve transition order", (
 test("failure threshold survives restart and retention, then one success immediately closes the incident", (t) => {
   const f = fixture(t); let store = f.open(); store.add([platform()]);
   cycle(store, { [url]: true }, 0);
-  for (let i = 1; i <= 2; i++) {
-    cycle(store, { [url]: false }, i * 10);
-    const p = store.list()[0];
-    assert.equal(instanceStatus(p, url), "healthy");
-    assert.equal(platformStatus(p), "healthy");
-    assert.deepEqual(recentIncidents([p]), []);
-    assert.equal(p.stateHistory[url][0].timestamp, time(0));
-    store = f.reopen();
-  }
-  cycle(store, { [url]: false }, 30);
+  cycle(store, { [url]: false }, 10);
+  const pending = store.list()[0];
+  assert.equal(instanceStatus(pending, url), "healthy");
+  assert.equal(platformStatus(pending), "healthy");
+  assert.deepEqual(recentIncidents([pending]), []);
+  assert.equal(pending.stateHistory[url][0].timestamp, time(0));
+  store = f.reopen();
+  cycle(store, { [url]: false }, 20);
   assert.equal(platformStatus(store.list()[0]), "critical");
-  assert.equal(recentIncidents(store.list())[0].startedAt, time(30));
-  for (let i = 4; i <= 8; i++) cycle(store, { [url]: false }, i * 10);
+  assert.equal(recentIncidents(store.list())[0].startedAt, time(20));
+  for (let i = 3; i <= 8; i++) cycle(store, { [url]: false }, i * 10);
   assert.deepEqual(store.list()[0].stateHistory[url].map((s) => s.status), ["warning", "healthy", "unknown"]);
-  assert.equal(recentIncidents(store.list())[0].startedAt, time(30));
+  assert.equal(recentIncidents(store.list())[0].startedAt, time(20));
   cycle(store, { [url]: true }, 90);
   store = f.reopen();
   const p = store.list()[0];
@@ -159,12 +157,10 @@ test("successes and unknown results break failure streaks independently for each
   assert.equal(platformStatus(p), "healthy");
   cycle(store, { [url]: false, [second]: false });
   cycle(store, { [url]: null, [second]: false });
-  for (let i = 0; i < 2; i++) {
-    cycle(store, { [url]: false, [second]: false });
-    p = store.list()[0];
-    assert.equal(instanceStatus(p, url), "unknown");
-    assert.equal(platformStatus(p), "unknown");
-  }
+  cycle(store, { [url]: false, [second]: false });
+  p = store.list()[0];
+  assert.equal(instanceStatus(p, url), "unknown");
+  assert.equal(platformStatus(p), "unknown");
   cycle(store, { [url]: false, [second]: false });
   assert.equal(platformStatus(store.list()[0]), "critical");
 });
@@ -178,7 +174,6 @@ test("failed writes and stale cycles do not advance the consecutive failure coun
   assert.throws(() => cycle(store, { [url]: false }), /disk failure/);
   db.exec("DROP TRIGGER fail_threshold");
   assert.equal(store.recordCycle("p", { [url]: false }, time(10), 0), false);
-  cycle(store, { [url]: false });
   assert.equal(platformStatus(store.list()[0]), "healthy");
   cycle(store, { [url]: false });
   assert.equal(platformStatus(store.list()[0]), "critical");
@@ -257,8 +252,8 @@ test("older JSON reconstructs history, defaults endpoints and preserves missing 
   assert.deepEqual(migrated.instances, [oldUrl]);
   assert.equal(migrated.healthUrls[oldUrl], url);
   assert.deepEqual(migrated.checkTimes, [time(20), null, null]);
-  assert.deepEqual(migrated.stateHistory[oldUrl], [{ status: "healthy", timestamp: time(20) }, { status: "unknown", timestamp: null }]);
-  assert.deepEqual(migrated.platformStateHistory.map((s) => s.status), ["healthy", "unknown"]);
+  assert.deepEqual(migrated.stateHistory[oldUrl], [{ status: "healthy", timestamp: time(20) }, { status: "warning", timestamp: null }, { status: "unknown", timestamp: null }]);
+  assert.deepEqual(migrated.platformStateHistory.map((s) => s.status), ["healthy", "critical", "unknown"]);
   assert.deepEqual(f.reopen().list()[0], migrated);
 });
 
@@ -348,8 +343,6 @@ test("monitor timeouts persist failed checks and abort pending requests", async 
   assert.deepEqual(store.list()[0].checks[url], [false]);
   assert.deepEqual(store.list()[0].stateHistory[url].map((s) => s.status), ["unknown"]);
   await monitor.tick();
-  assert.equal(platformStatus(store.list()[0]), "unknown");
-  await monitor.tick();
   assert.equal(platformStatus(store.list()[0]), "critical");
 });
 
@@ -376,17 +369,19 @@ test("an empty legacy dataset imports once and unmatched cycle lengths retain al
   assert.equal(dashboardStatus(p), "healthy");
 });
 
-test("the scheduler runs immediately, repeats every ten seconds and stops", async (t) => {
+test("the scheduler runs immediately, repeats every two seconds and stops", async (t) => {
   const f = fixture(t); const store = f.open(); store.add([platform()]);
   let checks = 0;
-  const monitor = new Monitor(store, async () => { checks++; return true; }, () => time(checks * 10));
+  const monitor = new Monitor(store, async () => { checks++; return false; }, () => time(checks * 2));
   t.mock.timers.enable({ apis: ["setInterval"] });
   t.after(() => monitor.stop());
   async function settle() { await new Promise((resolve) => setImmediate(resolve)); }
   monitor.start(); await settle(); assert.equal(checks, 1);
-  monitor.start(); t.mock.timers.tick(9_999); await settle(); assert.equal(checks, 1);
+  assert.equal(platformStatus(store.list()[0]), "unknown");
+  monitor.start(); t.mock.timers.tick(1_999); await settle(); assert.equal(checks, 1);
   t.mock.timers.tick(1); await settle(); assert.equal(checks, 2);
-  monitor.stop(); t.mock.timers.tick(10_000); await settle(); assert.equal(checks, 2);
+  assert.equal(platformStatus(store.list()[0]), "critical");
+  monitor.stop(); t.mock.timers.tick(2_000); await settle(); assert.equal(checks, 2);
 });
 
 const dayAt = (days, seconds = 0) => new Date(Date.UTC(2026, 0, 1 + days, 0, 0, seconds)).toISOString();
@@ -477,7 +472,7 @@ test("v1 migration backfills only retained runs and rejects future schema", (t) 
   assert.throws(() => new PlatformStore(f.directory), /Unsupported SQLite schema/);
 });
 
-test("v2 migration preserves old outage decisions and raw data while new cycles require three failures", (t) => {
+test("v2 migration preserves old outage decisions and raw data while new cycles require two failures", (t) => {
   const f = fixture(t); let store = f.open(); store.add([platform()]);
   [true, false, false, false, true].forEach((r, i) => cycle(store, { [url]: r }, i * 10));
   const before = store.list(time(40))[0];
@@ -487,9 +482,9 @@ test("v2 migration preserves old outage decisions and raw data while new cycles 
   const migrated = store.list(time(40))[0];
   assert.deepEqual(migrated, { ...before, checkStatuses: { [url]: ["healthy", "critical", "critical"] } });
   assert.equal(db.prepare("PRAGMA user_version").get().user_version, 3);
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 2; i++) {
     cycle(store, { [url]: false }, 40 + i * 10);
-    assert.equal(platformStatus(store.list()[0]), i < 3 ? "healthy" : "critical");
+    assert.equal(platformStatus(store.list()[0]), i < 2 ? "healthy" : "critical");
   }
   const expected = store.list();
   assert.deepEqual(f.reopen().list(), expected);

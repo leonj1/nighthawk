@@ -115,7 +115,7 @@ test("latest ten are ordered globally by failure or recovery, independent of pla
 test("healthy-only instances are excluded and partial platform failures are included", () => {
   assert.deepEqual(recentIncidents([platform([state("healthy", 20), state("unknown", 0)])]), []);
   assert.deepEqual(recentIncidents([]), []);
-  const data = { id: "p", name: "Platform", instances: ["a", "b"], checks: { a: [true], b: [false, false, false] }, checkedAt: time(10) };
+  const data = { id: "p", name: "Platform", instances: ["a", "b"], checks: { a: [true], b: [false, false] }, checkedAt: time(10) };
   const [incident] = recentIncidents([data]);
   assert.equal(incident.instance, "b");
   assert.equal(incident.startedAt, time(10));

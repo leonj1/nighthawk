@@ -20,7 +20,7 @@ After({ tags: "@sqlite" }, function () {
   if (this.directory) rmSync(this.directory, { recursive: true, force: true });
 });
 async function check(world, result) {
-  world.clock += 10_000;
+  world.clock += 2_000;
   await new Monitor(world.store, async () => result, () => new Date(world.clock).toISOString()).tick();
 }
 When("a persisted health check reports {string}", async function (result) {
@@ -48,7 +48,7 @@ Then("the latest check advances without moving the healthy transition time", fun
   assert.notEqual(p.checkedAt, this.beforeRepeat.checkedAt);
   assert.deepEqual(p.stateHistory, this.beforeRepeat.stateHistory);
   assert.deepEqual(p.platformStateHistory, this.beforeRepeat.platformStateHistory);
-  assert.equal(relativeCheckTime(p.stateHistory[url][0].timestamp, this.clock), "30 seconds ago");
+  assert.equal(relativeCheckTime(p.stateHistory[url][0].timestamp, this.clock), "6 seconds ago");
 });
 
 Then("the persisted timestamps render relative labels and full timestamp tooltips", function () {

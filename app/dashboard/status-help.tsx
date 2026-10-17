@@ -56,12 +56,12 @@ export function StatusInfo() {
       </button>
       {open ? (
         <div className="status-info-popover" id="status-info-popover" role="dialog" aria-label="How status works">
-          <p><strong>Healthy:</strong> at least one instance is healthy, with fewer than three consecutive failed checks.</p>
+          <p><strong>Healthy:</strong> at least one instance is healthy, with fewer than two consecutive failed checks.</p>
           <p><strong>Recovered:</strong> all instances were offline in this window and are now back.</p>
           <p><strong>Down:</strong> all instances are offline.</p>
           <p><strong>Unchecked:</strong> no conclusive health check yet.</p>
-          <p>Health checks run every 10 seconds. HTTP 2xx responses are healthy.</p>
-          <p>An instance goes offline after three consecutive failed checks and recovers after one successful check. Until its first success or third consecutive failure, it stays unchecked.</p>
+          <p>Health checks run every 2 seconds. HTTP 2xx responses are healthy.</p>
+          <p>An instance goes offline after two consecutive failed checks and recovers after one successful check. Until its first success or second consecutive failure, it stays unchecked.</p>
           <p>Uptime is the share of checks that succeeded in the last 30 days. Unknown results are not counted.</p>
         </div>
       ) : null}
